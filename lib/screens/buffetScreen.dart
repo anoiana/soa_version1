@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart'; // Thêm import này
+import 'menuScreen.dart';
 import 'openTable.dart';
 
 class BuffetSelectionScreen extends StatefulWidget {
@@ -183,7 +184,7 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => MenuScreen(buffetIndex: index),
+                                builder: (context) => MenuScreen(packageId: buffetTypes[index]['package_id']),
                               ),
                             );
                           },
@@ -211,7 +212,7 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                                     child: buffetTypes[index]['img'] != null
-                                        ? Image.network(
+                                        ? Image.asset(
                                       buffetTypes[index]['img']!,
                                       fit: BoxFit.cover,
                                       width: double.infinity,
@@ -274,22 +275,5 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
         ],
       ),
     );
-  }
-}
-
-// Giữ nguyên MenuScreen nếu không cần thay đổi
-class MenuScreen extends StatefulWidget {
-  final int buffetIndex;
-
-  MenuScreen({required this.buffetIndex});
-
-  @override
-  _MenuScreenState createState() => _MenuScreenState();
-}
-
-class _MenuScreenState extends State<MenuScreen> {
-  @override
-  Widget build(BuildContext context) {
-    return Container(); // Thay bằng mã gốc của bạn
   }
 }
