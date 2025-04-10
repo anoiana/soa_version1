@@ -2,8 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:intl/intl.dart'; // Thêm import này
 import 'openTable.dart';
-import 'package:intl/intl.dart'; // Thêm import này ở đầu file
 
 class BuffetSelectionScreen extends StatefulWidget {
   @override
@@ -11,20 +11,18 @@ class BuffetSelectionScreen extends StatefulWidget {
 }
 
 class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
-  List<Map<String, dynamic>> buffetTypes = []; // Danh sách buffet từ API
-  bool isLoading = true; // Trạng thái đang tải
-  String? errorMessage; // Lưu thông báo lỗi nếu có
+  List<Map<String, dynamic>> buffetTypes = [];
+  bool isLoading = true;
+  String? errorMessage;
 
   @override
   void initState() {
     super.initState();
-    fetchBuffetMenu(); // Gọi API khi khởi tạo màn hình
+    fetchBuffetMenu();
   }
 
-  // Hàm lấy dữ liệu từ API /menu/
   Future<void> fetchBuffetMenu() async {
-    const String apiUrl = 'https://soa-deploy.up.railway.app/menu/buffet/'; // Thay bằng URL API thực tế của bạn
-
+    const String apiUrl = 'https://soa-deploy.up.railway.app/menu/buffet/';
     try {
       final response = await http.get(
         Uri.parse(apiUrl),
@@ -34,14 +32,13 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
       );
 
       if (response.statusCode == 200) {
-        // Giả định API trả về JSON giống danh sách bạn cung cấp
         final List<dynamic> data = jsonDecode(response.body);
         setState(() {
           buffetTypes = data.map((item) => {
             'name': item['name'] as String,
             'description': item['description'] as String,
             'price_per_person': item['price_per_person'] as String,
-            'img': item['img'] as String?, // Có thể null
+            'img': item['img'] as String?,
             'package_id': item['package_id'] as int,
           }).toList();
           isLoading = false;
@@ -69,7 +66,7 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
         children: [
           if (isLargeScreen)
             NavigationRail(
-              backgroundColor: Colors.grey[900], // Đổi màu cho đồng bộ
+              backgroundColor: Colors.grey[900],
               extended: true,
               selectedIndex: 0,
               onDestinationSelected: (int index) {},
@@ -125,7 +122,7 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (context) => TableSelectionScreen()),
-                        ); // Quay lại màn hình trước đó
+                        );
                       },
                     ),
                   ],
@@ -158,7 +155,7 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                                 isLoading = true;
                                 errorMessage = null;
                               });
-                              fetchBuffetMenu(); // Thử lại khi có lỗi
+                              fetchBuffetMenu();
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange[400],
@@ -280,12 +277,7 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
   }
 }
 
-// Thêm gói intl để format tiền tệ
-// Trong pubspec.yaml, thêm:
-// dependencies:
-//   intl: ^0.17.0
-
-// Lớp MenuScreen giữ nguyên, nhưng nếu cần tích hợp API khác cho món ăn, hãy cho tôi biết!
+// Giữ nguyên MenuScreen nếu không cần thay đổi
 class MenuScreen extends StatefulWidget {
   final int buffetIndex;
 
@@ -296,11 +288,8 @@ class MenuScreen extends StatefulWidget {
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  // Giữ nguyên phần còn lại của MenuScreen như trong mã gốc của bạn
-  // Nếu bạn muốn tích hợp API cho danh sách món ăn trong MenuScreen, hãy cung cấp thêm thông tin về API đó.
   @override
   Widget build(BuildContext context) {
-    // Giữ nguyên mã gốc của bạn ở đây
     return Container(); // Thay bằng mã gốc của bạn
   }
 }
