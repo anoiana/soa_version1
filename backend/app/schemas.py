@@ -17,8 +17,9 @@ class UserLogin(BaseModel):
 # MENU SERVICE
 class MenuItemBase(BaseModel):
     name: str
-    description: str | None = None
+    category: str | None = None
     available: bool = True
+    img: str | None = None
 
 class MenuItemCreate(MenuItemBase):
     pass
@@ -28,7 +29,6 @@ class MenuItemUpdate(MenuItemBase):
 
 class MenuItemResponse(MenuItemBase):
     item_id: int
-
     model_config = ConfigDict(from_attributes=True)
 
 # BUFFET SERVICE
@@ -36,6 +36,7 @@ class BuffetPackageBase(BaseModel):
     name: str
     description: str | None = None
     price_per_person: Decimal
+    img: str | None = None
 
 class BuffetPackageCreate(BuffetPackageBase):
     pass
@@ -90,8 +91,11 @@ class TableSessionBase(BaseModel):
 class TableSessionCreate(BaseModel):
     table_number: str  # Nhập số bàn thay vì table_id
     number_of_customers: int    
-    package_id: int
     secret_code: str 
+
+class Table_UpdatePackage(BaseModel):
+    table_number: str
+    package_id: int
 
 class TableSessionClose(BaseModel):
     secret_code: str

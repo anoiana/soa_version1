@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float,Text, DECIMAL, DateTime
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -18,6 +19,7 @@ class BuffetPackage(Base):
     name = Column(String, nullable=False)
     description = Column(Text)
     price_per_person = Column(DECIMAL, nullable=False)
+    img = Column(String)
     items = relationship("PackageItem", back_populates="buffet_package")
 
 class PackageItem(Base):
@@ -37,6 +39,7 @@ class MenuItem(Base):
     name = Column(String, nullable=False)
     category = Column(Text)
     available = Column(Boolean, default=True)
+    img = Column(String)
     packages = relationship("PackageItem", back_populates="menu_item")
 
 # ORDER SERVICE
@@ -95,7 +98,7 @@ class Payment(Base):
     payment_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     session_id = Column(Integer, ForeignKey("table_session.session_id"), nullable=False, unique=True)
     amount = Column(DECIMAL(10, 2), nullable=False)
-    payment_time = Column(DateTime, default=datetime.now(timezone.utc) + timedelta(hours=7))
+    payment_time = Column(DateTime, default=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")))
     payment_method = Column(String(50), nullable=True)  # Phương thức thanh toán (tiền mặt, thẻ, v.v.)
 
     # Liên kết với TableSession

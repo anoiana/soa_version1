@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app import models, schemas
 import redis
+from zoneinfo import ZoneInfo
 
 # Kết nối Redis để gửi thông báo đến queue
 redis_client = redis.Redis(host='localhost', port=6379, db=0)
@@ -29,7 +30,7 @@ def create_order_with_items(db: Session, order_data: schemas.OrderCreate):
     # Tạo order mới
     new_order = models.Order(
         session_id=session.session_id,  # Lấy session_id từ bàn
-        order_time=datetime.now(timezone.utc) + timedelta(hours=7)
+        order_time= datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
     )
     
     db.add(new_order)
@@ -106,9 +107,8 @@ def open_table(db: Session, table_data: schemas.TableSessionCreate):
     # Tạo phiên bàn mới
     new_session = models.TableSession(
         table_id=table.table_id,  # Dùng table_id từ số bàn
-        start_time=datetime.now(timezone.utc) + timedelta(hours=7),
+        start_time=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")),
         number_of_customers=table_data.number_of_customers,
-        package_id=table_data.package_id,
         shift_id=shift_id
     )
 
@@ -142,7 +142,7 @@ def close_table(db: Session, table_number: str, request: schemas.TableSessionClo
     get_current_shift(db, request.secret_code)
     
     # ✅ Cập nhật end_time để đóng bàn
-    existing_session.end_time = datetime.now(timezone.utc) + timedelta(hours=7)
+    existing_session.end_time = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
 
     # ✅ Cập nhật trạng thái bàn thành "ready"
     table.status = "ready"
@@ -162,7 +162,7 @@ def close_table(db: Session, table_number: str, request: schemas.TableSessionClo
 # Hàm tìm ca làm việc hiện tại.
 def get_current_shift(db: Session, secret_code: str):
     """Trả về shift_id nếu secret_code hợp lệ, ngược lại báo lỗi."""
-    now = datetime.now(timezone.utc) + timedelta(hours=7)
+    now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
     current_shift = db.query(models.Shift).filter(
         models.Shift.start_time <= now,
         models.Shift.end_time >= now,
@@ -191,3 +191,32 @@ def calculate_total_amount(db: Session, session_id: int) -> float:
     total_amount = buffet_package.price_per_person * session.number_of_customers
     return total_amount
 
+# Hàm update Package ID
+def update_package_for_table(db: Session, data: schemas.Table_UpdatePackage):
+    table = db.query(models.Table).filter(
+        models.Table.table_number == data.table_number
+    ).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bàn.")
+
+    # Tìm phiên bàn đang mở
+    session = db.query(models.TableSession).filter(
+        models.TableSession.table_id == table.table_id,
+        models.TableSession.end_time.is_(None)
+    ).first()
+    if not session:
+        raise HTTPException(status_code=400, detail="Bàn không có phiên hoạt động.")
+
+    # Kiểm tra gói buffet có tồn tại không
+    buffet = db.query(models.BuffetPackage).filter(
+        models.BuffetPackage.package_id == data.package_id
+    ).first()
+    if not buffet:
+        raise HTTPException(status_code=404, detail="Không tìm thấy gói buffet.")
+
+    # Cập nhật package_id
+    session.package_id = data.package_id
+    db.commit()
+    db.refresh(session)
+
+    return {"message": "Cập nhật gói buffet thành công.", "session_id": session.session_id}

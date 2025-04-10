@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from app import models
 import random
 import string
+from zoneinfo import ZoneInfo
 
 def generate_secret_code():
     """Tạo mã bí mật với 3 chữ in hoa đầu và 3 số sau."""
@@ -15,7 +16,7 @@ def generate_secret_code():
     return chu_hoa + so
 
 def create_shifts_for_today(db: Session):
-    now = datetime.now(timezone.utc)+ timedelta(hours=7)
+    now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     shifts = [

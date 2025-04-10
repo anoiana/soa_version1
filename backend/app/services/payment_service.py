@@ -1,3 +1,4 @@
+from zoneinfo import ZoneInfo
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -24,7 +25,7 @@ def process_payment(db: Session, request: schemas.PaymentCreate):
     new_payment = models.Payment(
         session_id=request.session_id,
         amount=request.amount,
-        payment_time=datetime.now(timezone.utc) + timedelta(hours=7),
+        payment_time=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")),
         payment_method="Mặc định"
     )
 

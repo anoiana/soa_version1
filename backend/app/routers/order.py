@@ -20,4 +20,7 @@ def close_table_endpoint(table_number: str, request: schemas.TableSessionClose, 
 async def confirm_order(order_data: schemas.OrderCreate, db: Session = Depends(get_db)):
     return order_service.create_order_with_items(db, order_data)
 
-
+# Update Package ID
+@router.put("/table/update-package")
+def update_table_package(data: schemas.Table_UpdatePackage, db: Session = Depends(get_db)):
+    return order_service.update_package_for_table(db, data)

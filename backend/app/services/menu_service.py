@@ -21,7 +21,7 @@ def create_menu_item(db: Session, items: List[MenuItemCreate]) -> List[MenuItemR
         db.add(new_item)
         db.commit()
         db.refresh(new_item)
-        created_items.append(MenuItemResponse.model_validate(new_item, from_attributes=True)) # Sửa lỗi ở đây
+        created_items.append(MenuItemResponse.model_validate(new_item, from_attributes=True)) 
     return created_items
 
 # Lấy danh sách món ăn theo gói buffet
