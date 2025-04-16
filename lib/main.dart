@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:soa_version1/screens/signInScreen.dart';
 
 import 'screens/openTable.dart';
 
@@ -16,7 +17,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[850], // Nền tối
         fontFamily: 'Roboto',
       ),
-      home: TableSelectionScreen(),
+      home: LoginScreen(),
     );
   }
 }
