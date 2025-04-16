@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "soa_version1" "\0"
+            VALUE "FileDescription", "midterm" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "soa_version1" "\0"
+            VALUE "InternalName", "midterm" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "soa_version1.exe" "\0"
-            VALUE "ProductName", "soa_version1" "\0"
+            VALUE "OriginalFilename", "midterm.exe" "\0"
+            VALUE "ProductName", "midterm" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
