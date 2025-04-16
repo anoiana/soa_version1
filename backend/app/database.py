@@ -27,8 +27,6 @@ def get_db():
     finally:
         db.close()
 
-# === 2. FIREBASE CONFIG ===
-
 # Lấy nội dung JSON từ biến môi trường
 firebase_config_str = os.environ.get("FIREBASE_CONFIG")
 if not firebase_config_str:

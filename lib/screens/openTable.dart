@@ -86,7 +86,7 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
                   labelStyle: TextStyle(color: Colors.orange[400]),
                   prefixIcon: Icon(Icons.people, color: Colors.orange[400]),
                   filled: true,
-                  fillColor: Colors.grey[800]!.withOpacity(0.3),
+                  fillColor: Colors.grey[800]!.withAlpha(76),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
