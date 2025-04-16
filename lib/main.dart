@@ -1,5 +1,6 @@
 // ****** CODE HOÀN CHỈNH - ĐẦY ĐỦ FILE - KHÔNG CÒN PLACEHOLDER ******
 import 'package:flutter/material.dart';
+import 'screens/signInScreen.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
@@ -7,11 +8,11 @@ import 'dart:convert';
 import 'package:collection/collection.dart'; // For groupBy and MapEquality
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
+import 'package:midterm/screens/signInScreen.dart';
 import 'package:shimmer/shimmer.dart'; // Import Shimmer
 import 'package:web_socket_channel/web_socket_channel.dart'; // Import WebSocket
 import 'package:web_socket_channel/status.dart'
-    as status; // For WebSocket status codes
-
+    as status;
 // Comment out or remove if you don't have this file and the ManagementScreen class
 // import 'management_screen.dart';
 
@@ -254,7 +255,7 @@ class MyApp extends StatelessWidget {
       title: 'Restaurant App',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
-      home: MenuScreen(),
+      home: LoginScreen(),
     );
   }
 }
