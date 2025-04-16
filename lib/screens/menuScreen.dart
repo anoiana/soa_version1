@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../services/service.dart';
+import 'openTable.dart';
 
 class MenuScreen extends StatefulWidget {
-  final int packageId; // Nhận package_id từ BuffetSelectionScreen
+  final int packageId;
+  final int tableNumber;
 
-  MenuScreen({required this.packageId});
+  MenuScreen({required this.packageId, required this.tableNumber});
 
   @override
   _MenuScreenState createState() => _MenuScreenState();
@@ -15,6 +18,7 @@ class _MenuScreenState extends State<MenuScreen> {
   List<Map<String, dynamic>> menuItems = [];
   List<Map<String, dynamic>> cart = [];
   bool isLoading = true;
+  bool isConfirmLoading = false; // Trạng thái loading cho nút Xác nhận
   String? errorMessage;
   int selectedCategoryIndex = 0;
 
@@ -24,54 +28,172 @@ class _MenuScreenState extends State<MenuScreen> {
     fetchMenuItems();
   }
 
-  // Hàm lấy danh sách món ăn từ API
   Future<void> fetchMenuItems() async {
-    final String apiUrl = 'https://soa-deploy.up.railway.app/menu/packages/${widget.packageId}/menu-items'; // Thay bằng URL thực tế
-
     try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          menuItems = data.map((item) => {
-            'name': item['name'] as String,
-            'category': item['category'] as String,
-            'available': item['available'] as bool,
-            'img': item['img'] as String?,
-            'item_id': item['item_id'] as int,
-          }).toList();
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          errorMessage = 'Không thể tải danh sách món ăn: ${response.statusCode}';
-          isLoading = false;
-        });
-      }
+      final items = await ApiService.fetchMenuItems(widget.packageId);
+      setState(() {
+        menuItems = items;
+        isLoading = false;
+      });
     } catch (e) {
       setState(() {
-        errorMessage = 'Lỗi kết nối: $e';
+        errorMessage = e.toString();
         isLoading = false;
       });
     }
   }
 
-  // Lấy danh sách category duy nhất từ menuItems
   List<String> getUniqueCategories() {
     return menuItems.map((item) => item['category'] as String).toSet().toList();
+  }
+
+  // Hàm gửi yêu cầu xác nhận đơn hàng
+  Future<void> confirmOrder(BuildContext context) async {
+    if (cart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Giỏ hàng trống!'), backgroundColor: Colors.red[700]),
+      );
+      return;
+    }
+
+    setState(() {
+      isConfirmLoading = true; // Bắt đầu loading
+    });
+
+    try {
+      final success = await ApiService.confirmOrder(widget.tableNumber, cart);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xác nhận đơn hàng thành công'), backgroundColor: Colors.green[700]),
+        );
+        setState(() {
+          cart.clear(); // Xóa giỏ hàng sau khi xác nhận
+        });
+        Navigator.pop(context); // Đóng drawer
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red[700]),
+      );
+    } finally {
+      setState(() {
+        isConfirmLoading = false; // Kết thúc loading
+      });
+    }
+  }
+
+  // Hàm hiển thị dialog đóng bàn
+  Future<void> closeTable(BuildContext context) async {
+    TextEditingController codeController = TextEditingController();
+
+    return showDialog(
+      context: context,
+      barrierDismissible: false, // Ngăn đóng dialog khi nhấn ngoài
+      builder: (BuildContext context) {
+        bool isLoading = false; // Trạng thái loading
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              backgroundColor: Colors.grey[900],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: Text(
+                'Đóng Bàn ${widget.tableNumber}',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: codeController,
+                    style: TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Nhập mã code',
+                      labelStyle: TextStyle(color: Colors.orange[400]),
+                      prefixIcon: Icon(Icons.vpn_key, color: Colors.orange[400]),
+                      filled: true,
+                      fillColor: Colors.grey[800]!.withOpacity(0.3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(context),
+                  child: Text('Hủy', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[400],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: isLoading
+                      ? null // Vô hiệu hóa khi đang loading
+                      : () async {
+                    if (codeController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Vui lòng nhập mã code'), backgroundColor: Colors.red[700]),
+                      );
+                      return;
+                    }
+
+                    setState(() {
+                      isLoading = true; // Bắt đầu loading
+                    });
+
+                    try {
+                      final success = await ApiService.closeTable(widget.tableNumber, codeController.text);
+                      if (success) {
+                        Navigator.pop(context); // Đóng dialog
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Đã đóng bàn thành công'), backgroundColor: Colors.green[700]),
+                        );
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (context) => TableSelectionScreen()),
+                              (route) => false, // Xóa toàn bộ stack
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red[700]),
+                      );
+                    } finally {
+                      setState(() {
+                        isLoading = false; // Kết thúc loading
+                      });
+                    }
+                  },
+                  child: isLoading
+                      ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.orange[400],
+                      strokeWidth: 3,
+                    ),
+                  )
+                      : Text(
+                    'Xác nhận',
+                    style: TextStyle(color: Colors.black87),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     bool isLargeScreen = MediaQuery.of(context).size.width > 800;
     List<String> categories = getUniqueCategories();
-    String buffetName = widget.packageId.toString(); // Có thể thay bằng tên từ API nếu cần
 
     return Scaffold(
       backgroundColor: Colors.grey[900],
@@ -79,15 +201,16 @@ class _MenuScreenState extends State<MenuScreen> {
         backgroundColor: Colors.grey[850],
         centerTitle: true,
         title: Text(
-          'CHỌN MÓN - Buffet $buffetName',
+          'CHỌN MÓN - Bàn ${widget.tableNumber}',
           style: TextStyle(
             color: Colors.orange[400],
             fontSize: 28,
             fontWeight: FontWeight.bold,
-            fontFamily: 'Lobster',
+            fontFamily: 'Roboto',
           ),
         ),
         actions: [
+          // Nút giỏ hàng
           Builder(
             builder: (context) => IconButton(
               icon: Stack(
@@ -101,7 +224,7 @@ class _MenuScreenState extends State<MenuScreen> {
                         radius: 10,
                         backgroundColor: Colors.red[700],
                         child: Text(
-                          '${cart.fold(0, (sum, item) => sum + (item['quantity'] as int))}',
+                          '${cart.fold(0, (sum, item) => sum + (item['quantity'] as int? ?? 0))}',
                           style: TextStyle(fontSize: 12, color: Colors.white),
                         ),
                       ),
@@ -109,9 +232,18 @@ class _MenuScreenState extends State<MenuScreen> {
                 ],
               ),
               onPressed: () {
-                Scaffold.of(context).openEndDrawer();
+                try {
+                  Scaffold.of(context).openEndDrawer();
+                } catch (e) {
+                  print('Error opening endDrawer: $e');
+                }
               },
             ),
+          ),
+          // Nút đóng bàn
+          IconButton(
+            icon: Icon(Icons.exit_to_app, color: Colors.orange[400], size: 32),
+            onPressed: () => closeTable(context),
           ),
         ],
       ),
@@ -137,7 +269,7 @@ class _MenuScreenState extends State<MenuScreen> {
                         color: Colors.orange[400],
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Lobster',
+                        fontFamily: 'Roboto',
                       ),
                     ),
                   ),
@@ -175,7 +307,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   int quantity = item['quantity'] ?? 1;
 
                   return Dismissible(
-                    key: Key(item['name']),
+                    key: Key(item['item_id'].toString()),
                     background: Container(
                       color: Colors.red[700],
                       alignment: Alignment.centerRight,
@@ -186,7 +318,7 @@ class _MenuScreenState extends State<MenuScreen> {
                     onDismissed: (direction) {
                       setState(() => cart.removeAt(index));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${item['name']} đã bị xóa')),
+                        SnackBar(content: Text('Đã xóa món ${item['name']}')),
                       );
                     },
                     child: Card(
@@ -284,22 +416,20 @@ class _MenuScreenState extends State<MenuScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   minimumSize: Size(double.infinity, 60),
                 ),
-                onPressed: cart.isEmpty
-                    ? null
-                    : () {
-                  int totalItems = cart.fold(0, (sum, item) => sum + (item['quantity'] as int));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Đã xác nhận $totalItems món!', style: TextStyle(fontSize: 16)),
-                      backgroundColor: Colors.green[700],
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                  Navigator.pop(context);
-                },
-                child: Text(
-                  'Xác Nhận (${cart.fold(0, (sum, item) => sum + (item['quantity'] as int))})',
+                onPressed: cart.isEmpty || isConfirmLoading
+                    ? null // Vô hiệu hóa khi giỏ trống hoặc đang loading
+                    : () => confirmOrder(context),
+                child: isConfirmLoading
+                    ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.orange[400],
+                    strokeWidth: 3,
+                  ),
+                )
+                    : Text(
+                  'Xác Nhận (${cart.fold(0, (sum, item) => sum + (item['quantity'] as int? ?? 0))})',
                   style: TextStyle(fontSize: 20, color: Colors.black87, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -321,9 +451,7 @@ class _MenuScreenState extends State<MenuScreen> {
                       label: Text(categories[index], style: TextStyle(fontSize: 16)),
                       selected: selectedCategoryIndex == index,
                       onSelected: (selected) {
-                        if (selected) {
-                          setState(() => selectedCategoryIndex = index);
-                        }
+                        if (selected) setState(() => selectedCategoryIndex = index);
                       },
                       selectedColor: Colors.orange[400],
                       backgroundColor: Colors.grey[700],
@@ -387,30 +515,31 @@ class _MenuScreenState extends State<MenuScreen> {
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),
-                itemCount: menuItems
-                    .where((item) => item['category'] == categories[selectedCategoryIndex])
-                    .length,
+                itemCount: menuItems.where((item) => item['category'] == categories[selectedCategoryIndex]).length,
                 itemBuilder: (context, index) {
                   final filteredItems =
                   menuItems.where((item) => item['category'] == categories[selectedCategoryIndex]).toList();
                   final item = filteredItems[index];
+
                   return GestureDetector(
                     onTap: item['available']
                         ? () {
                       setState(() {
-                        int existingIndex = cart.indexWhere((cartItem) => cartItem['name'] == item['name']);
+                        int existingIndex = cart.indexWhere((cartItem) => cartItem['item_id'] == item['item_id']);
                         if (existingIndex != -1) {
                           cart[existingIndex]['quantity'] = (cart[existingIndex]['quantity'] as int) + 1;
                         } else {
-                          cart.add({'name': item['name'], 'image': item['img'], 'quantity': 1});
+                          cart.add({
+                            'item_id': item['item_id'],
+                            'quantity': 1,
+                            'name': item['name'],
+                            'img': item['img'],
+                          });
                         }
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(
-                            '✅ Đã thêm ${item['name']} vào giỏ hàng',
-                            style: TextStyle(fontSize: 16),
-                          ),
+                          content: Text('✅ Đã thêm ${item['name']} vào giỏ hàng'),
                           backgroundColor: Colors.green[700],
                           behavior: SnackBarBehavior.floating,
                           duration: Duration(seconds: 2),
@@ -498,20 +627,22 @@ class _MenuScreenState extends State<MenuScreen> {
                                       onPressed: () {
                                         setState(() {
                                           int existingIndex =
-                                          cart.indexWhere((cartItem) => cartItem['name'] == item['name']);
+                                          cart.indexWhere((cartItem) => cartItem['item_id'] == item['item_id']);
                                           if (existingIndex != -1) {
                                             cart[existingIndex]['quantity'] =
                                                 (cart[existingIndex]['quantity'] as int) + 1;
                                           } else {
-                                            cart.add({'name': item['name'], 'image': item['img'], 'quantity': 1});
+                                            cart.add({
+                                              'item_id': item['item_id'],
+                                              'quantity': 1,
+                                              'name': item['name'],
+                                              'img': item['img'],
+                                            });
                                           }
                                         });
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
-                                            content: Text(
-                                              '✅ Đã thêm ${item['name']} vào giỏ hàng',
-                                              style: TextStyle(fontSize: 16),
-                                            ),
+                                            content: Text('✅ Đã thêm ${item['name']} vào giỏ hàng'),
                                             backgroundColor: Colors.green[700],
                                             behavior: SnackBarBehavior.floating,
                                             duration: Duration(seconds: 2),
@@ -563,7 +694,7 @@ class _MenuScreenState extends State<MenuScreen> {
                       onPressed: cart.isEmpty ? null : () => Scaffold.of(context).openEndDrawer(),
                       icon: Icon(Icons.shopping_cart, color: Colors.black87, size: 24),
                       label: Text(
-                        'Xem Giỏ (${cart.fold(0, (sum, item) => sum + (item['quantity'] as int))})',
+                        'Xem Giỏ (${cart.fold(0, (sum, item) => sum + (item['quantity'] as int? ?? 0))})',
                         style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     );
