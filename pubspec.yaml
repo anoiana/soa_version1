@@ -51,6 +51,7 @@ dev_dependencies:
   animate_do: ^3.3.4
   flutter_spinkit: ^5.2.1
   google_fonts: ^6.2.1
+  web_socket_channel: ^3.0.0
   shimmer: ^3.0.0
 
 # For information on the generic Dart part of this file, see the

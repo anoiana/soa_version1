@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../services/service.dart';
 import 'openTable.dart';
 
@@ -17,37 +18,164 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   List<Map<String, dynamic>> menuItems = [];
   List<Map<String, dynamic>> cart = [];
-  bool isLoading = true;
-  bool isConfirmLoading = false; // Trạng thái loading cho nút Xác nhận
+  bool isLoading = true; // Chỉ dùng cho lần tải đầu tiên
+  bool isConfirmLoading = false;
   String? errorMessage;
   int selectedCategoryIndex = 0;
+  WebSocketChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     fetchMenuItems();
+    _initWebSocket();
+  }
+
+  void _initWebSocket() {
+    print('Khởi tạo kết nối WebSocket...');
+    try {
+      _channel = WebSocketChannel.connect(
+        Uri.parse('wss://web-socket-soa-midterm.onrender.com/ws/menu'),
+      );
+
+      print('Kết nối WebSocket thành công.');
+
+      _channel!.stream.listen(
+            (message) {
+          print('Nhận thông điệp WebSocket: $message');
+          try {
+            final data = jsonDecode(message);
+            if (data['menu_update'] != null) {
+              final menuUpdate = data['menu_update'];
+              print('Nhận cập nhật menu: $menuUpdate');
+              // Tải lại danh sách món ăn
+              fetchMenuItems().then((_) {
+                print('Đã tải lại danh sách món ăn sau cập nhật WebSocket.');
+                // Kiểm tra và cập nhật giỏ hàng
+                _validateCart();
+                // Hiển thị thông báo
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Món ${menuUpdate['name']} đã ${menuUpdate['available'] ? 'còn hàng' : 'hết hàng'}.',
+                    ),
+                    backgroundColor: menuUpdate['available'] ? Colors.green[700] : Colors.red[700],
+                  ),
+                );
+              });
+            } else {
+              print('Thông điệp không chứa menu_update, bỏ qua.');
+            }
+          } catch (e) {
+            print('Lỗi khi xử lý thông điệp WebSocket: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Lỗi xử lý thông điệp từ server'), backgroundColor: Colors.red[700]),
+            );
+          }
+        },
+        onError: (error) {
+          print('Lỗi WebSocket: $error');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi kết nối WebSocket'), backgroundColor: Colors.red[700]),
+          );
+          _reconnectWebSocket();
+        },
+        onDone: () {
+          print('Kết nối WebSocket đã đóng.');
+          _reconnectWebSocket();
+        },
+      );
+    } catch (e) {
+      print('Lỗi khi khởi tạo WebSocket: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể kết nối WebSocket'), backgroundColor: Colors.red[700]),
+      );
+      _reconnectWebSocket();
+    }
+  }
+
+  void _reconnectWebSocket() {
+    Future.delayed(Duration(seconds: 5), () {
+      if (mounted) {
+        print('Thử kết nối lại WebSocket...');
+        _initWebSocket();
+      }
+    });
   }
 
   Future<void> fetchMenuItems() async {
     try {
       final items = await ApiService.fetchMenuItems(widget.packageId);
+      // Kiểm tra dữ liệu từ API
+      final validatedItems = items.where((item) {
+        final itemId = item['item_id'];
+        if (itemId == null || itemId is! int) {
+          print('Món không hợp lệ, bỏ qua: $item');
+          return false;
+        }
+        return true;
+      }).toList();
+
       setState(() {
-        menuItems = items;
-        isLoading = false;
+        menuItems = validatedItems;
+        if (isLoading) isLoading = false; // Chỉ tắt loading lần đầu
       });
+      print('Đã tải danh sách món ăn: ${menuItems.length} món.');
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
-        isLoading = false;
+        if (isLoading) isLoading = false;
       });
+      print('Lỗi khi tải danh sách món ăn: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi tải danh sách món ăn'), backgroundColor: Colors.red[700]),
+      );
+    }
+  }
+
+  void _validateCart() {
+    List<Map<String, dynamic>> updatedCart = [];
+    for (var cartItem in cart) {
+      final itemId = cartItem['item_id'];
+      if (itemId == null || itemId is! int) {
+        print('Món trong giỏ không hợp lệ, xóa: $cartItem');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Món ${cartItem['name']} không hợp lệ và đã bị xóa.'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+        continue;
+      }
+      final menuItem = menuItems.firstWhere(
+            (item) => item['item_id'] == itemId,
+        orElse: () => {},
+      );
+      if (menuItem.isNotEmpty && menuItem['available'] == true) {
+        updatedCart.add(cartItem);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Món ${cartItem['name']} đã hết hàng hoặc không còn trong menu.'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
+    }
+    if (updatedCart.length != cart.length) {
+      setState(() {
+        cart = updatedCart;
+      });
+      print('Giỏ hàng đã được cập nhật: ${cart.length} món.');
     }
   }
 
   List<String> getUniqueCategories() {
-    return menuItems.map((item) => item['category'] as String).toSet().toList();
+    final categories = menuItems.map((item) => item['category'] as String).toSet().toList();
+    print('Danh mục: $categories');
+    return categories;
   }
 
-  // Hàm gửi yêu cầu xác nhận đơn hàng
   Future<void> confirmOrder(BuildContext context) async {
     if (cart.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -57,7 +185,7 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     setState(() {
-      isConfirmLoading = true; // Bắt đầu loading
+      isConfirmLoading = true;
     });
 
     try {
@@ -67,9 +195,9 @@ class _MenuScreenState extends State<MenuScreen> {
           SnackBar(content: Text('Đã xác nhận đơn hàng thành công'), backgroundColor: Colors.green[700]),
         );
         setState(() {
-          cart.clear(); // Xóa giỏ hàng sau khi xác nhận
+          cart.clear();
         });
-        Navigator.pop(context); // Đóng drawer
+        Navigator.pop(context);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,20 +205,19 @@ class _MenuScreenState extends State<MenuScreen> {
       );
     } finally {
       setState(() {
-        isConfirmLoading = false; // Kết thúc loading
+        isConfirmLoading = false;
       });
     }
   }
 
-  // Hàm hiển thị dialog đóng bàn
   Future<void> closeTable(BuildContext context) async {
     TextEditingController codeController = TextEditingController();
 
     return showDialog(
       context: context,
-      barrierDismissible: false, // Ngăn đóng dialog khi nhấn ngoài
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        bool isLoading = false; // Trạng thái loading
+        bool isLoading = false;
 
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
@@ -132,7 +259,7 @@ class _MenuScreenState extends State<MenuScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: isLoading
-                      ? null // Vô hiệu hóa khi đang loading
+                      ? null
                       : () async {
                     if (codeController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,20 +269,20 @@ class _MenuScreenState extends State<MenuScreen> {
                     }
 
                     setState(() {
-                      isLoading = true; // Bắt đầu loading
+                      isLoading = true;
                     });
 
                     try {
                       final success = await ApiService.closeTable(widget.tableNumber, codeController.text);
                       if (success) {
-                        Navigator.pop(context); // Đóng dialog
+                        Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Đã đóng bàn thành công'), backgroundColor: Colors.green[700]),
                         );
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(builder: (context) => TableSelectionScreen()),
-                              (route) => false, // Xóa toàn bộ stack
+                              (route) => false,
                         );
                       }
                     } catch (e) {
@@ -164,7 +291,7 @@ class _MenuScreenState extends State<MenuScreen> {
                       );
                     } finally {
                       setState(() {
-                        isLoading = false; // Kết thúc loading
+                        isLoading = false;
                       });
                     }
                   },
@@ -191,6 +318,13 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   @override
+  void dispose() {
+    print('Đóng kết nối WebSocket.');
+    _channel?.sink.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     bool isLargeScreen = MediaQuery.of(context).size.width > 800;
     List<String> categories = getUniqueCategories();
@@ -210,7 +344,6 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
         ),
         actions: [
-          // Nút giỏ hàng
           Builder(
             builder: (context) => IconButton(
               icon: Stack(
@@ -235,12 +368,11 @@ class _MenuScreenState extends State<MenuScreen> {
                 try {
                   Scaffold.of(context).openEndDrawer();
                 } catch (e) {
-                  print('Error opening endDrawer: $e');
+                  print('Lỗi khi mở endDrawer: $e');
                 }
               },
             ),
           ),
-          // Nút đóng bàn
           IconButton(
             icon: Icon(Icons.exit_to_app, color: Colors.orange[400], size: 32),
             onPressed: () => closeTable(context),
@@ -417,7 +549,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   minimumSize: Size(double.infinity, 60),
                 ),
                 onPressed: cart.isEmpty || isConfirmLoading
-                    ? null // Vô hiệu hóa khi giỏ trống hoặc đang loading
+                    ? null
                     : () => confirmOrder(context),
                 child: isConfirmLoading
                     ? SizedBox(
@@ -437,78 +569,82 @@ class _MenuScreenState extends State<MenuScreen> {
           ],
         ),
       ),
-      body: Column(
+      body: isLoading
+          ? Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange[400]!),
+        ),
+      )
+          : errorMessage != null
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: Colors.red[700], size: 60),
+            SizedBox(height: 20),
+            Text(
+              errorMessage!,
+              style: TextStyle(color: Colors.white, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                fetchMenuItems();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[400],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(
+                'Thử lại',
+                style: TextStyle(color: Colors.black87, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+      )
+          : Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(categories.length, (index) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: ChoiceChip(
-                      label: Text(categories[index], style: TextStyle(fontSize: 16)),
-                      selected: selectedCategoryIndex == index,
-                      onSelected: (selected) {
-                        if (selected) setState(() => selectedCategoryIndex = index);
-                      },
-                      selectedColor: Colors.orange[400],
-                      backgroundColor: Colors.grey[700],
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      labelStyle: TextStyle(
-                        color: selectedCategoryIndex == index ? Colors.black87 : Colors.white70,
-                        fontWeight: FontWeight.bold,
-                      ),
+            child: Wrap(
+              spacing: MediaQuery.of(context).size.width < 600 ? 4 : 8, // Khoảng cách ngang nhỏ hơn trên màn hình nhỏ
+              runSpacing: 8, // Khoảng cách dọc giữa các hàng
+              alignment: WrapAlignment.center, // Căn giữa danh mục
+              children: List.generate(categories.length, (index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2), // Giảm padding ngang
+                  child: ChoiceChip(
+                    label: Text(
+                      categories[index],
+                      style: const TextStyle(fontSize: 16),
                     ),
-                  );
-                }),
-              ),
+                    selected: selectedCategoryIndex == index,
+                    onSelected: (selected) {
+                      if (selected) setState(() => selectedCategoryIndex = index);
+                    },
+                    selectedColor: Colors.orange[400],
+                    backgroundColor: Colors.grey[700],
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // Giảm padding bên trong
+                    labelStyle: TextStyle(
+                      color: selectedCategoryIndex == index ? Colors.black87 : Colors.white70,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }),
             ),
           ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: isLoading
-                  ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange[400]!),
-                ),
-              )
-                  : errorMessage != null
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.red[700], size: 60),
-                    SizedBox(height: 20),
-                    Text(
-                      errorMessage!,
-                      style: TextStyle(color: Colors.white, fontSize: 18),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          isLoading = true;
-                          errorMessage = null;
-                        });
-                        fetchMenuItems();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange[400],
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: Text(
-                        'Thử lại',
-                        style: TextStyle(color: Colors.black87, fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-                  : GridView.builder(
+              child: GridView.builder(
+                key: ValueKey(selectedCategoryIndex),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: isLargeScreen ? 4 : 2,
                   childAspectRatio: 0.75,
