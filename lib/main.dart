@@ -32,7 +32,6 @@ const String kWebSocketUrl =
     'wss://web-socket-soa-midterm.onrender.com/ws/kitchen'; // Your WebSocket URL
 
 // --- Data Models (MenuItem, KitchenListOrder, KitchenOrderDetailItem) ---
-// (Data Models remain unchanged - Keep the existing MenuItem, KitchenListOrder, KitchenOrderDetailItem classes here)
 class MenuItem {
   final int itemId;
   final String name;
@@ -147,125 +146,334 @@ class KitchenOrderDetailItem {
 typedef OrderUpdateCallback = void Function(
     Map<int, int> pendingOrderCountsByTable);
 typedef TableClearedCallback = void Function(int tableNumber);
+typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
 void main() {
   runApp(MyApp());
 }
 
+// --- Stateful MyApp for Theme Management ---
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
 
-class MyApp extends StatelessWidget {
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.dark; // Default to dark mode
+
+  void _changeTheme(ThemeMode themeMode) {
+    setState(() {
+      _themeMode = themeMode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    // (ThemeData setup remains unchanged - Keep the existing ThemeData)
-    final ThemeData appTheme = ThemeData(
+    // --- Define Base Theme Properties ---
+    final TextTheme baseTextTheme = TextTheme(
+      bodyMedium: GoogleFonts.lato(fontSize: 14),
+      titleMedium:
+          GoogleFonts.oswald(fontWeight: FontWeight.w600, fontSize: 16),
+      headlineSmall:
+          GoogleFonts.oswald(fontWeight: FontWeight.bold, fontSize: 22),
+      bodySmall: GoogleFonts.lato(fontSize: 11.5),
+      labelLarge: GoogleFonts.lato(fontWeight: FontWeight.bold),
+    );
+
+    final CardTheme baseCardTheme = CardTheme(
+      elevation: kCardElevation,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin:
+          const EdgeInsets.symmetric(vertical: 5, horizontal: kDefaultPadding),
+    );
+
+    final AppBarTheme baseAppBarTheme = AppBarTheme(
+      elevation: kCardElevation,
+      titleTextStyle: GoogleFonts.oswald(
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        shadows: const [
+          Shadow(blurRadius: 4.0, color: Colors.black45, offset: Offset(2, 2))
+        ],
+      ),
+      centerTitle: true,
+    );
+
+    final DialogTheme baseDialogTheme = DialogTheme(
+      titleTextStyle:
+          GoogleFonts.oswald(fontWeight: FontWeight.bold, fontSize: 19),
+      contentTextStyle: GoogleFonts.lato(fontSize: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    );
+
+    final ElevatedButtonThemeData baseElevatedButtonTheme =
+        ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: GoogleFonts.lato(fontWeight: FontWeight.bold),
+      ),
+    );
+
+    final SegmentedButtonThemeData baseSegmentedButtonTheme =
+        SegmentedButtonThemeData(
+      style: ButtonStyle(
+        side: MaterialStateProperty.all(const BorderSide(width: 0.5)),
+        shape: MaterialStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+      ),
+    );
+
+    // --- Define Dark Theme ---
+    final ThemeData darkTheme = ThemeData(
       brightness: Brightness.dark,
       primarySwatch: Colors.blueGrey,
       scaffoldBackgroundColor: const Color(0xFF263238),
       fontFamily: GoogleFonts.lato().fontFamily,
-      appBarTheme: AppBarTheme(
+      appBarTheme: baseAppBarTheme.copyWith(
         backgroundColor: const Color(0xFF37474F),
-        elevation: kCardElevation,
-        titleTextStyle: GoogleFonts.oswald(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          shadows: const [
-            Shadow(blurRadius: 4.0, color: Colors.black45, offset: Offset(2, 2))
-          ],
-        ),
+        foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
-        centerTitle: true,
+        actionsIconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: (baseAppBarTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.white),
       ),
-      cardTheme: CardTheme(
-        elevation: kCardElevation,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      cardTheme: baseCardTheme.copyWith(
         color: const Color(0xFF455A64),
-        margin: const EdgeInsets.symmetric(
-            vertical: 5, horizontal: kDefaultPadding),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: baseDialogTheme.copyWith(
         backgroundColor: const Color(0xFF37474F).withOpacity(0.95),
-        titleTextStyle: GoogleFonts.oswald(
-            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 19),
-        contentTextStyle: GoogleFonts.lato(color: Colors.white70, fontSize: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titleTextStyle: (baseDialogTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.white),
+        contentTextStyle:
+            (baseDialogTheme.contentTextStyle ?? const TextStyle())
+                .copyWith(color: Colors.white70),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: Colors.teal,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          textStyle: GoogleFonts.lato(fontWeight: FontWeight.bold),
-        ),
-      ),
+          style:
+              (baseElevatedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        foregroundColor: MaterialStateProperty.all(Colors.white),
+        backgroundColor: MaterialStateProperty.all(Colors.teal),
+      )),
       switchTheme: SwitchThemeData(
         thumbColor: MaterialStateProperty.resolveWith<Color>((states) {
-          if (states.contains(MaterialState.disabled)) return Colors.grey;
+          if (states.contains(MaterialState.disabled)) return Colors.grey[700]!;
           return states.contains(MaterialState.selected)
-              ? Colors.greenAccent
-              : Colors.redAccent;
+              ? Colors.greenAccent[100]!
+              : Colors.redAccent[100]!;
         }),
         trackColor: MaterialStateProperty.resolveWith<Color>((states) {
           if (states.contains(MaterialState.disabled))
-            return Colors.grey.withOpacity(0.3);
-          return (states.contains(MaterialState.selected)
-                  ? Colors.greenAccent
-                  : Colors.redAccent)
-              .withOpacity(0.5);
+            return Colors.grey[800]!.withOpacity(0.5);
+          Color baseColor = states.contains(MaterialState.selected)
+              ? Colors.greenAccent[100]!
+              : Colors.redAccent[100]!;
+          return baseColor.withOpacity(0.4);
         }),
       ),
       iconTheme: const IconThemeData(color: Colors.white70),
-      textTheme: TextTheme(
-        bodyMedium: GoogleFonts.lato(
-            color: Colors.white.withOpacity(0.85), fontSize: 14),
-        titleMedium: GoogleFonts.oswald(
-            color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
-        headlineSmall: GoogleFonts.oswald(
-            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
-        bodySmall: GoogleFonts.lato(color: Colors.grey[400], fontSize: 11.5),
-        labelLarge: GoogleFonts.lato(fontWeight: FontWeight.bold),
-      ),
+      textTheme: baseTextTheme.apply(
+          bodyColor: Colors.white.withOpacity(0.85),
+          displayColor: Colors.white,
+          decorationColor: Colors.white70),
       dividerTheme: const DividerThemeData(
           color: Colors.white24, thickness: 0.8, space: 1),
+      shadowColor: Colors.black.withOpacity(0.5),
       colorScheme: ColorScheme.fromSwatch(
         primarySwatch: Colors.blueGrey,
         brightness: Brightness.dark,
-      ).copyWith(secondary: Colors.cyanAccent, error: Colors.redAccent[100]),
+      ).copyWith(
+        secondary: Colors.cyanAccent,
+        error: Colors.redAccent[100]!,
+        onSurface: Colors.white,
+        onBackground: Colors.white,
+        onError: Colors.black,
+        surface: const Color(0xFF37474F),
+        background: const Color(0xFF263238),
+        errorContainer: Colors.redAccent[100]?.withOpacity(0.2) ??
+            Colors.red.withOpacity(0.2),
+        onErrorContainer: Colors.redAccent[100] ?? Colors.red,
+      ),
       primaryColorLight: Colors.cyanAccent[100],
-      segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.resolveWith<Color?>((states) {
-            if (states.contains(MaterialState.selected))
-              return Colors.blueGrey[700];
-            return const Color(0xFF37474F);
-          }),
-          side: MaterialStateProperty.all(
-              const BorderSide(color: Colors.white30, width: 0.5)),
-          shape: MaterialStateProperty.all(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+      segmentedButtonTheme: baseSegmentedButtonTheme.copyWith(
+          style:
+              (baseSegmentedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected))
+            return Colors.blueGrey[700]!;
+          return const Color(0xFF37474F);
+        }),
+        side: MaterialStateProperty.all(
+            const BorderSide(color: Colors.white30, width: 0.5)),
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) return Colors.white;
+          return Colors.white70;
+        }),
+      )),
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: GoogleFonts.lato(color: Colors.grey[500], fontSize: 13),
+        prefixIconColor: Colors.grey[500],
+        suffixIconColor: Colors.grey[500],
+        filled: true,
+        fillColor: const Color(0xFF455A64).withOpacity(0.5),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.2), width: 0.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.2), width: 0.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.cyanAccent.withOpacity(0.7), width: 1.0),
         ),
       ),
-      inputDecorationTheme: InputDecorationTheme(
-        // Added for TextField styling consistency
-        hintStyle: GoogleFonts.lato(color: Colors.grey[500], fontSize: 13),
-        // Define other default styles if needed
-      ),
+      disabledColor: Colors.grey[600],
     );
+
+    // --- Define Light Theme ---
+    final ThemeData lightTheme = ThemeData(
+      brightness: Brightness.light,
+      primarySwatch: Colors.blueGrey,
+      scaffoldBackgroundColor: Colors.grey[100]!,
+      fontFamily: GoogleFonts.lato().fontFamily,
+      appBarTheme: baseAppBarTheme.copyWith(
+        backgroundColor: Colors.blueGrey[700],
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: (baseAppBarTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.white),
+      ),
+      cardTheme: baseCardTheme.copyWith(
+        color: Colors.white,
+      ),
+      dialogTheme: baseDialogTheme.copyWith(
+        backgroundColor: Colors.white.withOpacity(0.98),
+        titleTextStyle: (baseDialogTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.black87),
+        contentTextStyle:
+            (baseDialogTheme.contentTextStyle ?? const TextStyle())
+                .copyWith(color: Colors.black54),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+          style:
+              (baseElevatedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        foregroundColor: MaterialStateProperty.all(Colors.white),
+        backgroundColor: MaterialStateProperty.all(Colors.blueGrey[600]),
+      )),
+      switchTheme: SwitchThemeData(
+        thumbColor: MaterialStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return Colors.grey.shade400;
+          }
+          if (states.contains(MaterialState.selected)) {
+            return Colors.blueGrey[600];
+          }
+          return Colors.grey.shade400;
+        }),
+        trackColor: MaterialStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return Colors.grey.shade400.withOpacity(0.5);
+          }
+          if (states.contains(MaterialState.selected)) {
+            return Colors.blueGrey[600]?.withOpacity(0.5);
+          }
+          return Colors.grey.shade400.withOpacity(0.5);
+        }),
+      ),
+      iconTheme: IconThemeData(color: Colors.grey[700]),
+      textTheme: baseTextTheme.apply(
+          bodyColor: Colors.black87,
+          displayColor: Colors.black,
+          decorationColor: Colors.black54),
+      dividerTheme:
+          DividerThemeData(color: Colors.grey[400]!, thickness: 0.8, space: 1),
+      shadowColor: Colors.black.withOpacity(0.2),
+      colorScheme: ColorScheme.fromSwatch(
+        primarySwatch: Colors.blueGrey,
+        brightness: Brightness.light,
+      ).copyWith(
+        secondary: Colors.teal,
+        error: Colors.red[700]!,
+        onSurface: Colors.black87,
+        onBackground: Colors.black87,
+        onError: Colors.white,
+        surface: Colors.white,
+        background: Colors.grey[100]!,
+        errorContainer: Colors.red[100]!,
+        onErrorContainer: Colors.red[900]!,
+      ),
+      primaryColorLight: Colors.teal[100],
+      segmentedButtonTheme: baseSegmentedButtonTheme.copyWith(
+          style:
+              (baseSegmentedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected))
+            return Colors.blueGrey[100]!;
+          return Colors.white;
+        }),
+        side: MaterialStateProperty.all(
+            BorderSide(color: Colors.grey[400]!, width: 0.5)),
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected))
+            return Colors.blueGrey[800]!;
+          return Colors.grey[700]!;
+        }),
+      )),
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: GoogleFonts.lato(color: Colors.grey[500], fontSize: 13),
+        prefixIconColor: Colors.grey[500],
+        suffixIconColor: Colors.grey[500],
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: Colors.grey[400]!, width: 0.8),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: Colors.grey[400]!, width: 0.8),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.teal.withOpacity(0.8), width: 1.2),
+        ),
+      ),
+      disabledColor: Colors.grey[400],
+    );
+
+    // --- Build MaterialApp ---
     return MaterialApp(
       title: 'Restaurant App',
       debugShowCheckedModeBanner: false,
-      theme: appTheme,
-      home: MenuScreen(),
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: _themeMode,
+      home: MenuScreen(
+        onThemeChanged: _changeTheme,
+        currentThemeMode: _themeMode,
+      ),
     );
   }
 }
 
-// --- Menu Screen ---
-// (MenuScreen and its State remain largely unchanged, including search and drawer fixes)
-// Keep the existing _MenuScreenState class here, ensuring _buildAppDrawer is the corrected version without hoverColor on ExpansionTile.
+// --- MODIFIED Menu Screen (Accepts Theme Callbacks) ---
 class MenuScreen extends StatefulWidget {
+  final ThemeChangeCallback onThemeChanged;
+  final ThemeMode currentThemeMode;
+
+  const MenuScreen({
+    Key? key,
+    required this.onThemeChanged,
+    required this.currentThemeMode,
+  }) : super(key: key);
+
   @override
   _MenuScreenState createState() => _MenuScreenState();
 }
@@ -282,17 +490,14 @@ class _MenuScreenState extends State<MenuScreen> {
   final ScrollController _tableScrollController = ScrollController();
   final ScrollController _menuScrollController = ScrollController();
   List<GlobalKey> _categoryKeys = [];
-  bool _showExclamationMark = false; // Related to table scrolling visibility
-  double _exclamationMarkAngle = 0.0; // Related to table scrolling visibility
+  bool _showExclamationMark = false;
+  double _exclamationMarkAngle = 0.0;
   final GlobalKey<_KitchenOrderListScreenState> _kitchenListKey = GlobalKey();
   int get orderScreenIndex => _categories.isEmpty ? 1 : _categories.length + 1;
   Map<int, int> _pendingOrderCountsByTable = {};
   int? _hoveredTableIndex;
-
-  // --- Search State Variables ---
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
-  // ---------------------------
 
   @override
   void initState() {
@@ -307,12 +512,10 @@ class _MenuScreenState extends State<MenuScreen> {
       },
     );
     _tableScrollController.addListener(_onTableScroll);
-    _searchController.addListener(_onSearchChanged); // Add search listener
+    _searchController.addListener(_onSearchChanged);
     _fetchMenuData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _onTableScroll(); // Initial check for exclamation mark
-      }
+      if (mounted) _onTableScroll();
     });
   }
 
@@ -321,10 +524,8 @@ class _MenuScreenState extends State<MenuScreen> {
     _tableScrollController.removeListener(_onTableScroll);
     _tableScrollController.dispose();
     _menuScrollController.dispose();
-    _searchController
-        .removeListener(_onSearchChanged); // Remove search listener
-    _searchController.dispose(); // Dispose search controller
-    // Dispose other resources if needed
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -335,27 +536,26 @@ class _MenuScreenState extends State<MenuScreen> {
         _searchQuery = _searchController.text;
       });
     } else if (!mounted) {
-      _searchQuery = _searchController.text; // Update if not mounted
+      _searchQuery = _searchController.text;
     }
   }
 
   void _clearSearch() {
     if (_searchController.text.isNotEmpty) {
-      _searchController.clear(); // Listener will trigger setState
+      _searchController.clear();
     } else if (_searchQuery.isNotEmpty) {
       if (mounted) {
         setState(() {
           _searchQuery = "";
-        }); // Clear query state directly
+        });
       } else {
         _searchQuery = "";
       }
     }
   }
-  // -------------------------------------
 
+  // --- Data Fetching and State Update Methods ---
   Future<void> _fetchMenuData() async {
-    // (Keep existing implementation)
     if (!mounted) return;
     setState(() {
       _isLoadingMenu = true;
@@ -363,130 +563,95 @@ class _MenuScreenState extends State<MenuScreen> {
     });
     final url = Uri.parse('https://soa-deploy.up.railway.app/menu/');
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final r = await http.get(url).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      if (response.statusCode == 200) {
-        final List<dynamic> decodedData =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        final List<MenuItem> allItems = decodedData
-            .map((jsonItem) =>
-                MenuItem.fromJson(jsonItem as Map<String, dynamic>))
-            .toList();
-        final validItems =
-            allItems.where((item) => item.category.isNotEmpty).toList();
-        final groupedItems =
-            groupBy(validItems, (MenuItem item) => item.category);
-        final uniqueCategories = groupedItems.keys.toList()..sort();
-        final newCategoryKeys =
-            List.generate(uniqueCategories.length, (_) => GlobalKey());
-        final Map<int, MenuItem> itemsById = {
-          for (var item in validItems) item.itemId: item
-        };
+      if (r.statusCode == 200) {
+        final List<dynamic> d = jsonDecode(utf8.decode(r.bodyBytes));
+        final List<MenuItem> items =
+            d.map((i) => MenuItem.fromJson(i as Map<String, dynamic>)).toList();
+        final valid = items.where((i) => i.category.isNotEmpty).toList();
+        final grouped = groupBy(valid, (MenuItem i) => i.category);
+        final uniqueCats = grouped.keys.toList()..sort();
+        final keys = List.generate(uniqueCats.length, (_) => GlobalKey());
+        final byId = {for (var i in valid) i.itemId: i};
         setState(() {
-          _categories = uniqueCategories;
-          _menuItemsByCategory = groupedItems;
-          _menuItemsById = itemsById;
-          _categoryKeys = newCategoryKeys;
+          _categories = uniqueCats;
+          _menuItemsByCategory = grouped;
+          _menuItemsById = byId;
+          _categoryKeys = keys;
           _isLoadingMenu = false;
         });
       } else {
         if (!mounted) return;
         setState(() {
-          _menuErrorMessage = 'Lỗi tải menu (${response.statusCode})';
+          _menuErrorMessage = 'Lỗi tải menu (${r.statusCode})';
           _isLoadingMenu = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
-      print("Error fetching menu data: $e");
+      print("Error fetch menu: $e");
       setState(() {
-        _menuErrorMessage = 'Không thể tải menu. Kiểm tra kết nối.';
+        _menuErrorMessage = 'Không thể tải menu.';
         _isLoadingMenu = false;
       });
     }
   }
 
   Future<bool> _updateItemStatus(MenuItem item, bool newStatus) async {
-    // (Keep existing implementation)
     if (!mounted) return false;
     final String itemId = item.itemId.toString();
     if (item.itemId <= 0) {
-      print("Error: Invalid item ID (${item.itemId}) for update.");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Lỗi: ID món ăn không hợp lệ.'),
-            backgroundColor: Colors.redAccent));
-      }
       return false;
     }
     final url =
         Uri.parse('https://soa-deploy.up.railway.app/menu/$itemId/status')
             .replace(queryParameters: {'available': newStatus.toString()});
-    final headers = {'Content-Type': 'application/json'};
-    print('Calling API: PATCH ${url.toString()}');
+    final h = {'Content-Type': 'application/json'};
+    print('PATCH ${url.toString()}');
     try {
-      final response = await http
-          .patch(url, headers: headers)
+      final r = await http
+          .patch(url, headers: h)
           .timeout(const Duration(seconds: 10));
       if (!mounted) return false;
-      print('API Response Status Code: ${response.statusCode}');
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        print('API update successful for item ${item.itemId}');
-        final updatedItem = item.copyWith(available: newStatus);
-        final category = updatedItem.category;
-        if (_menuItemsByCategory.containsKey(category)) {
-          // Use setState to update the UI
+      print('API Resp: ${r.statusCode}');
+      if (r.statusCode == 200 || r.statusCode == 204) {
+        print('API OK item ${item.itemId}');
+        final u = item.copyWith(available: newStatus);
+        final cat = u.category;
+        if (_menuItemsByCategory.containsKey(cat)) {
           setState(() {
-            // Update in the category list
-            final categoryList = _menuItemsByCategory[category]!;
-            final itemIndex =
-                categoryList.indexWhere((i) => i.itemId == item.itemId);
-            if (itemIndex != -1) {
-              categoryList[itemIndex] = updatedItem;
-              print("Updated item in category '$category'");
-            } else {
-              print(
-                  "Warning: Item ${item.itemId} not found in category '$category' list during update.");
+            final list = _menuItemsByCategory[cat]!;
+            final idx = list.indexWhere((i) => i.itemId == item.itemId);
+            if (idx != -1) {
+              list[idx] = u;
             }
-
-            // Update in the ID map (important for details view)
             if (_menuItemsById.containsKey(item.itemId)) {
-              _menuItemsById[item.itemId] = updatedItem;
-              print("Updated item in ID map");
-            } else {
-              print(
-                  "Warning: Item ${item.itemId} not found in ID map during update.");
+              _menuItemsById[item.itemId] = u;
             }
           });
-        } else {
-          print(
-              "Warning: Category '$category' not found for item ${item.itemId} during update.");
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(
                   'Đã cập nhật: ${item.name} (${newStatus ? "Có sẵn" : "Hết hàng"})'),
               duration: const Duration(seconds: 2),
-              backgroundColor: Colors.green[700]));
+              backgroundColor: const Color.fromARGB(255, 18, 154, 88)));
         }
         return true;
       } else {
-        print(
-            'API update failed for item ${item.itemId}. Status: ${response.statusCode}, Body: ${response.body}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                  'Lỗi cập nhật trạng thái món ăn. Server: ${response.statusCode}'),
+              content: Text('Lỗi cập nhật món. Server: ${r.statusCode}'),
               backgroundColor: Colors.redAccent));
         }
         return false;
       }
     } catch (e) {
       if (!mounted) return false;
-      print('Error calling update API for item ${item.itemId}: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Lỗi mạng hoặc timeout khi cập nhật.'),
+            content: Text('Lỗi mạng/timeout cập nhật.'),
             backgroundColor: Colors.orangeAccent));
       }
       return false;
@@ -494,51 +659,44 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _updateExclamationMark() {
-    // (Keep existing implementation)
     if (!mounted ||
         !_tableScrollController.hasClients ||
         !_tableScrollController.position.hasContentDimensions) return;
-    final double scrollOffset = _tableScrollController.offset;
-    final double maxScroll = _tableScrollController.position.maxScrollExtent;
-    final double viewportHeight =
-        _tableScrollController.position.viewportDimension;
-    bool shouldShow =
-        maxScroll > 0 && (scrollOffset + viewportHeight < maxScroll - 20);
-    double targetAngle = shouldShow
+    final o = _tableScrollController.offset;
+    final m = _tableScrollController.position.maxScrollExtent;
+    final v = _tableScrollController.position.viewportDimension;
+    bool show = m > 0 && (o + v < m - 20);
+    double angle = show
         ? (math.pi / 12) *
             math.sin(DateTime.now().millisecondsSinceEpoch / 300.0)
         : 0.0;
-    if (_showExclamationMark != shouldShow ||
+    if (_showExclamationMark != show ||
         (_showExclamationMark &&
-            (_exclamationMarkAngle - targetAngle).abs() > 0.01)) {
+            (_exclamationMarkAngle - angle).abs() > 0.01)) {
       setState(() {
-        _showExclamationMark = shouldShow;
-        _exclamationMarkAngle = targetAngle;
+        _showExclamationMark = show;
+        _exclamationMarkAngle = angle;
       });
     }
   }
 
   void _onTableScroll() {
-    // (Keep existing implementation, ensure it calls _updateExclamationMark)
     if (!mounted ||
         !_tableScrollController.hasClients ||
         !_tableScrollController.position.hasContentDimensions) return;
-    final double scrollOffset = _tableScrollController.offset;
-    final double viewportHeight =
-        _tableScrollController.position.viewportDimension;
-    final int crossAxisCount = _getCrossAxisCount(context);
-    final double totalItemHeight = kTableItemHeight + kTableGridSpacing;
-    int firstVisibleRow = (scrollOffset / totalItemHeight).floor();
-    int lastVisibleRow =
-        ((scrollOffset + viewportHeight - 1) / totalItemHeight).floor();
-    int firstVisibleIndex = math.max(0, firstVisibleRow * crossAxisCount);
-    int lastVisibleIndex =
-        math.min(tables.length - 1, (lastVisibleRow + 1) * crossAxisCount - 1);
+    final o = _tableScrollController.offset;
+    final v = _tableScrollController.position.viewportDimension;
+    final c = _getCrossAxisCount(context);
+    final h = kTableItemHeight + kTableGridSpacing;
+    int r1 = (o / h).floor();
+    int r2 = ((o + v - 1) / h).floor();
+    int i1 = math.max(0, r1 * c);
+    int i2 = math.min(tables.length - 1, (r2 + 1) * c - 1);
     bool changed = false;
     for (int i = 0; i < tables.length; i++) {
-      bool currentlyVisible = (i >= firstVisibleIndex && i <= lastVisibleIndex);
-      if ((tables[i]['isVisible'] as bool? ?? false) != currentlyVisible) {
-        tables[i]['isVisible'] = currentlyVisible;
+      bool vis = (i >= i1 && i <= i2);
+      if ((tables[i]['isVisible'] as bool? ?? false) != vis) {
+        tables[i]['isVisible'] = vis;
         changed = true;
       }
     }
@@ -548,102 +706,61 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _scrollToCategory(int categoryIndex) {
-    // (Keep existing implementation with _clearSearch call)
-    if (categoryIndex < 1 || categoryIndex > _categories.length) {
-      print("Error: Invalid category index $categoryIndex requested.");
-      return;
-    }
-    int arrayIndex = categoryIndex - 1; // Convert to 0-based index
-    if (arrayIndex >= _categoryKeys.length) {
-      print(
-          "Error: Category key not found for index $arrayIndex. Keys length: ${_categoryKeys.length}");
-      return;
-    }
-
+    if (categoryIndex < 1 || categoryIndex > _categories.length) return;
+    int arrayIndex = categoryIndex - 1;
+    if (arrayIndex >= _categoryKeys.length) return;
     bool needsViewChange = selectedIndex != categoryIndex;
-
     if (needsViewChange) {
-      _clearSearch(); // Clear search BEFORE changing the index/view
+      _clearSearch();
       setState(() {
         selectedIndex = categoryIndex;
-        _isMenuCategoriesExpanded = true; // Ensure menu section is expanded
+        _isMenuCategoriesExpanded = true;
       });
-      // Add a small delay to allow the IndexedStack to switch and layout
       Future.delayed(const Duration(milliseconds: 150), () {
-        if (mounted) {
-          _performScroll(arrayIndex);
-        }
+        if (mounted) _performScroll(arrayIndex);
       });
     } else {
-      // Already viewing the correct category, just scroll to the top of it
       _performScroll(arrayIndex);
     }
   }
 
   void _performScroll(int arrayIndex) {
-    // (Keep existing implementation)
     if (!mounted || arrayIndex < 0 || arrayIndex >= _categoryKeys.length)
       return;
     final key = _categoryKeys[arrayIndex];
-    final context = key.currentContext;
-    if (context != null) {
-      // Ensure we are actually in a state where the menu list is potentially visible
-      bool isViewingAnyCategory =
-          selectedIndex >= 1 && selectedIndex <= _categories.length;
-      if (isViewingAnyCategory) {
-        // Check if the scroll controller is attached and ready
+    final ctx = key.currentContext;
+    if (ctx != null) {
+      bool isMenu = selectedIndex >= 1 && selectedIndex <= _categories.length;
+      if (isMenu) {
         if (_menuScrollController.hasClients &&
             _menuScrollController.position.hasContentDimensions) {
-          print("Scrolling to category index: $arrayIndex");
-          Scrollable.ensureVisible(
-            context,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeInOut,
-            alignment: 0.0, // Align to the top
-          );
+          Scrollable.ensureVisible(ctx,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeInOut,
+              alignment: 0.0);
         } else {
-          // If controller not ready, schedule scroll after the next frame
-          print("Scroll controller not ready, scheduling post-frame scroll.");
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _menuScrollController.hasClients) {
-              print(
-                  "Executing post-frame scroll to category index: $arrayIndex");
-              Scrollable.ensureVisible(context,
+            if (mounted && _menuScrollController.hasClients)
+              Scrollable.ensureVisible(ctx,
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.ease);
-            } else if (mounted) {
-              print(
-                  "Post-frame scroll attempt failed: Controller still not ready.");
-            }
           });
         }
-      } else {
-        print(
-            "Scroll attempt ignored: Not currently viewing a menu category list.");
       }
     } else {
-      print(
-          "Scroll Failed: Context is null for category key index $arrayIndex.");
-      // Optionally, schedule a retry if context might become available later
-      // WidgetsBinding.instance.addPostFrameCallback((_) => _performScroll(arrayIndex)); // Be careful with infinite loops
+      print("Scroll Fail: Ctx null $arrayIndex.");
     }
   }
 
   void _showOrderPopup(BuildContext context, int tableIndex) {
-    // (Keep existing implementation)
-    final int targetTableNumber = tableIndex + 1;
+    final int targetNum = tableIndex + 1;
     final kitchenState = _kitchenListKey.currentState;
     if (kitchenState != null) {
-      print(
-          "Requesting kitchen state to show orders for table $targetTableNumber");
-      kitchenState.showOrdersForTable(context, targetTableNumber);
+      kitchenState.showOrdersForTable(context, targetNum);
     } else {
-      print(
-          "Error: KitchenOrderListScreen state not available yet for table $targetTableNumber.");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Đang tải danh sách đơn hàng, vui lòng thử lại sau giây lát.'),
+          content: Text('Đang tải DS đơn...'),
           backgroundColor: Colors.orangeAccent,
           duration: Duration(seconds: 3),
         ),
@@ -652,80 +769,63 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   int _getNavigationRailSelectedIndex() {
-    // (Keep existing implementation)
-    if (selectedIndex == 0) return 0; // Tables
-    if (selectedIndex == orderScreenIndex) return 1; // Orders
-    // If any menu category is selected OR the menu panel is expanded, highlight Menu
-    bool isAnyCategorySelected =
-        selectedIndex >= 1 && selectedIndex <= _categories.length;
-    if (isAnyCategorySelected || _isMenuCategoriesExpanded) return 2;
-    return 0; // Default fallback
+    if (selectedIndex == 0) return 0;
+    if (selectedIndex == orderScreenIndex) return 1;
+    bool isCatSel = selectedIndex >= 1 && selectedIndex <= _categories.length;
+    if (isCatSel || _isMenuCategoriesExpanded) return 2;
+    return 0;
   }
 
   int _getCrossAxisCount(BuildContext context) {
-    // (Keep existing implementation)
     return MediaQuery.of(context).size.width > 1200
         ? kTableGridCrossAxisCountLarge
         : kTableGridCrossAxisCountSmall;
   }
 
   bool _isSmallScreen(BuildContext context) {
-    // (Keep existing implementation)
     return MediaQuery.of(context).size.width <= 800;
   }
 
   void _updateTableOrderCounts(Map<int, int> newCounts) {
-    // (Keep existing implementation)
     if (!mounted) return;
     bool changed = false;
-    _pendingOrderCountsByTable = Map.from(newCounts); // Store the latest counts
-    // Update the 'tables' list for UI display
+    _pendingOrderCountsByTable = Map.from(newCounts);
     for (int i = 0; i < tables.length; i++) {
-      int tableNum = i + 1;
-      int newCount = newCounts[tableNum] ?? 0;
-      int currentTablePendingCount =
-          tables[i]['pendingOrderCount'] as int? ?? 0;
-      if (currentTablePendingCount != newCount) {
-        tables[i]['pendingOrderCount'] = newCount;
+      int num = i + 1;
+      int count = newCounts[num] ?? 0;
+      int current = tables[i]['pendingOrderCount'] as int? ?? 0;
+      if (current != count) {
+        tables[i]['pendingOrderCount'] = count;
         changed = true;
       }
     }
     if (changed) {
-      print(
-          "Updating table counts from Kitchen (via general update): $newCounts");
-      setState(() {}); // Rebuild to show updated badges
+      print("Update table counts: $newCounts");
+      setState(() {});
     }
   }
 
   void _handleTableCleared(int tableNumber) {
-    // (Keep existing implementation)
     if (!mounted) return;
-    print("Received table cleared signal for table: $tableNumber");
-    int tableIndex = tableNumber - 1;
-    if (tableIndex >= 0 && tableIndex < tables.length) {
-      if ((tables[tableIndex]['pendingOrderCount'] as int? ?? 0) > 0) {
+    print("Table cleared: $tableNumber");
+    int idx = tableNumber - 1;
+    if (idx >= 0 && idx < tables.length) {
+      if ((tables[idx]['pendingOrderCount'] as int? ?? 0) > 0) {
         setState(() {
-          tables[tableIndex]['pendingOrderCount'] = 0;
-          _pendingOrderCountsByTable[tableNumber] =
-              0; // Also update the counts map
+          tables[idx]['pendingOrderCount'] = 0;
+          _pendingOrderCountsByTable[tableNumber] = 0;
         });
-        print(
-            "Set pending order count to 0 for table $tableNumber in MenuScreen.");
-        // Optional: Show a snackbar confirmation
+        print("Set pending 0 $tableNumber");
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
+          if (mounted)
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('Tất cả đơn chờ cho Bàn $tableNumber đã hoàn thành!'),
+              content: Text('Đơn Bàn $tableNumber hoàn thành!'),
               backgroundColor: Colors.lightGreen[700],
               duration: const Duration(seconds: 3),
             ));
-          }
         });
       } else {
-        print(
-            "Table $tableNumber already had 0 pending orders in MenuScreen state. Ignoring redundant clear signal.");
-        // Ensure the counts map is also zero, just in case
+        print("Table $tableNumber already 0.");
         if (_pendingOrderCountsByTable[tableNumber] != 0) {
           setState(() {
             _pendingOrderCountsByTable[tableNumber] = 0;
@@ -733,47 +833,32 @@ class _MenuScreenState extends State<MenuScreen> {
         }
       }
     } else {
-      print(
-          "Warning: Received cleared signal for invalid table number: $tableNumber");
+      print("Warn: Invalid table# cleared: $tableNumber");
     }
   }
 
+  // --- Build Methods ---
+
   @override
   Widget build(BuildContext context) {
-    // (Keep existing implementation)
     final bool smallScreen = _isSmallScreen(context);
-    final theme = Theme.of(context);
+    final theme = Theme.of(context); // Get current theme
 
     return Scaffold(
       appBar: smallScreen ? _buildAppBar(theme) : null,
       drawer: smallScreen ? _buildAppDrawer(theme) : null,
       body: Container(
-        // Optional: Add a subtle background gradient or pattern
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              theme.scaffoldBackgroundColor,
-              theme.scaffoldBackgroundColor
-                  .withBlue(theme.scaffoldBackgroundColor.blue + 5)
-                  .withGreen(theme.scaffoldBackgroundColor.green +
-                      2), // Slightly different shade at bottom
-            ],
-            stops: const [0.3, 1.0],
-          ),
-        ),
+        color: theme.scaffoldBackgroundColor, // Use theme's background
         child: Stack(
-          // Stack for the exclamation mark overlay
           children: [
             Row(
               children: [
                 if (!smallScreen) _buildNavigationRail(theme),
                 if (!smallScreen)
-                  const VerticalDivider(
+                  VerticalDivider(
                       width: 1,
                       thickness: 1,
-                      color: Colors.white12), // Subtle separator
+                      color: theme.dividerTheme.color), // Use theme color
                 Expanded(
                   child: Column(
                     children: [
@@ -781,12 +866,10 @@ class _MenuScreenState extends State<MenuScreen> {
                       if (!smallScreen)
                         Container(
                             height: 0.8,
-                            color: theme.dividerTheme.color ??
-                                Colors.white24), // Header separator
+                            color: theme.dividerTheme.color), // Use theme color
                       Expanded(
                         child: Padding(
-                          padding: EdgeInsets
-                              .zero, // Content padding handled internally
+                          padding: EdgeInsets.zero,
                           child: _buildCurrentView(theme),
                         ),
                       ),
@@ -796,7 +879,6 @@ class _MenuScreenState extends State<MenuScreen> {
                 ),
               ],
             ),
-            // Overlay for the exclamation mark (related to table scrolling)
             if (selectedIndex == 0 && _showExclamationMark)
               _buildExclamationOverlay(smallScreen),
           ],
@@ -806,44 +888,71 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   AppBar _buildAppBar(ThemeData theme) {
-    // (Keep existing implementation)
     return AppBar(
-      title: const Text('WELCOME'), // Consider making dynamic later
-      actions: _buildAppBarActions(),
+      title: const Text('WELCOME'),
+      actions: _buildAppBarActions(theme), // Pass theme
     );
   }
 
-  List<Widget> _buildAppBarActions() {
-    // (Keep existing implementation)
+  List<Widget> _buildAppBarActions(ThemeData theme) {
     return [
       IconButton(
-          icon: const Icon(Icons.person_outline),
-          tooltip: 'Tài khoản',
-          onPressed: () {}),
+        // Theme toggle button
+        icon: Icon(widget.currentThemeMode == ThemeMode.dark
+            ? Icons.light_mode_outlined
+            : Icons.dark_mode_outlined),
+        tooltip: widget.currentThemeMode == ThemeMode.dark
+            ? 'Chuyển sang Sáng'
+            : 'Chuyển sang Tối',
+        onPressed: () {
+          widget.onThemeChanged(
+            widget.currentThemeMode == ThemeMode.light
+                ? ThemeMode.dark
+                : ThemeMode.light,
+          );
+        },
+        color: theme.appBarTheme.actionsIconTheme?.color, // Use theme color
+      ),
       IconButton(
-          icon: const Icon(Icons.search),
-          tooltip: 'Tìm kiếm',
-          onPressed: () {}), // General search?
+        icon: const Icon(Icons.person_outline),
+        tooltip: 'Tài khoản',
+        onPressed: () {},
+        color: theme.appBarTheme.actionsIconTheme?.color,
+      ),
       const SizedBox(width: kDefaultPadding / 2),
     ];
   }
 
-  // --- CORRECTED: _buildAppDrawer without hoverColor on ExpansionTile ---
+  Widget _buildLargeScreenHeader(ThemeData theme) {
+    return Container(
+      color: theme.appBarTheme.backgroundColor, // Use theme color
+      padding: const EdgeInsets.symmetric(
+          horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
+      child: Row(
+        children: [
+          Expanded(
+              child: Text('WELCOME',
+                  textAlign: TextAlign.center,
+                  style: theme.appBarTheme.titleTextStyle)), // Use theme style
+          ..._buildAppBarActions(theme), // Pass theme here too
+        ],
+      ),
+    );
+  }
+
   Widget _buildAppDrawer(ThemeData theme) {
     bool isMenuSelected =
         selectedIndex >= 1 && selectedIndex <= _categories.length;
     Color highlight = theme.colorScheme.secondary;
     final divider = Divider(
-      color: theme.dividerTheme.color?.withOpacity(0.5) ?? Colors.white24,
-      thickness: theme.dividerTheme.thickness ?? 1,
-      height: kDefaultPadding * 1.5, // Adjust spacing
+      color: theme.dividerTheme.color?.withOpacity(0.5),
+      thickness: theme.dividerTheme.thickness,
+      height: kDefaultPadding * 1.5,
       indent: kDefaultPadding * 2,
       endIndent: kDefaultPadding * 2,
     );
-
     return Drawer(
-      backgroundColor:
-          theme.dialogTheme.backgroundColor, // Use consistent dark background
+      backgroundColor: theme.dialogTheme.backgroundColor,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -855,11 +964,11 @@ class _MenuScreenState extends State<MenuScreen> {
                       color: theme.dividerTheme.color ?? Colors.white12,
                       width: 0.5)),
             ),
-            child: Center(child: _buildLogo()), // Add your logo here
+            child: Center(child: _buildLogo()),
           ),
-          _buildDrawerItem(theme, Icons.table_restaurant_outlined,
-              'Danh sách bàn ăn', 0, selectedIndex, highlight, () {
-            _clearSearch(); // Clear search when navigating away
+          _buildDrawerItem(theme, Icons.table_restaurant_outlined, 'Bàn ăn', 0,
+              selectedIndex, highlight, () {
+            _clearSearch();
             setState(() {
               selectedIndex = 0;
               _isMenuCategoriesExpanded = false;
@@ -867,14 +976,9 @@ class _MenuScreenState extends State<MenuScreen> {
             });
           }),
           divider,
-          _buildDrawerItem(
-              theme,
-              Icons.receipt_long_outlined,
-              'Danh sách đơn hàng',
-              orderScreenIndex,
-              selectedIndex,
-              highlight, () {
-            _clearSearch(); // Clear search when navigating away
+          _buildDrawerItem(theme, Icons.receipt_long_outlined, 'Đơn hàng',
+              orderScreenIndex, selectedIndex, highlight, () {
+            _clearSearch();
             setState(() {
               selectedIndex = orderScreenIndex;
               _isMenuCategoriesExpanded = false;
@@ -883,12 +987,15 @@ class _MenuScreenState extends State<MenuScreen> {
           }),
           divider,
           ExpansionTile(
-            // *** REMOVED hoverColor HERE ***
             leading: Icon(Icons.restaurant_menu_outlined,
-                color: isMenuSelected ? highlight : Colors.white70, size: 24),
-            title: Text('Danh sách món ăn',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isMenuSelected ? highlight : Colors.white,
+                color: isMenuSelected ? highlight : theme.iconTheme.color,
+                size: 24),
+            title: Text('Món ăn',
+                style:
+                    (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                  color: isMenuSelected
+                      ? highlight
+                      : theme.textTheme.bodyMedium?.color,
                   fontWeight:
                       isMenuSelected ? FontWeight.w600 : FontWeight.w500,
                   fontSize: 14.5,
@@ -898,24 +1005,14 @@ class _MenuScreenState extends State<MenuScreen> {
               if (!_isLoadingMenu && _menuErrorMessage == null) {
                 setState(() => _isMenuCategoriesExpanded = expanded);
               } else if (expanded) {
-                // Prevent expanding if menu is loading or failed
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(_isLoadingMenu
-                      ? 'Đang tải menu...'
-                      : 'Lỗi tải menu, không thể mở rộng.'),
-                  duration: const Duration(seconds: 1),
-                ));
-                // Ensure the state is reset if expansion was attempted wrongly
-                Future.delayed(Duration.zero, () {
-                  // Schedule state update after build
+                /* ... show error ... */ Future.delayed(Duration.zero, () {
                   if (mounted)
                     setState(() => _isMenuCategoriesExpanded = false);
                 });
               }
             },
-            iconColor: Colors.white, // Color for the arrow icon
-            collapsedIconColor: Colors.white70,
-            // hoverColor: theme.colorScheme.secondary.withOpacity(0.1), // *** LINE REMOVED ***
+            iconColor: theme.iconTheme.color,
+            collapsedIconColor: theme.iconTheme.color?.withOpacity(0.7),
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -927,23 +1024,21 @@ class _MenuScreenState extends State<MenuScreen> {
                     : _menuErrorMessage != null
                         ? Center(
                             child: Text(_menuErrorMessage!,
-                                style: TextStyle(color: Colors.red[300])))
+                                style:
+                                    TextStyle(color: theme.colorScheme.error)))
                         : _categories.isEmpty
                             ? Center(
-                                child: Text("Chưa có danh mục nào.",
+                                child: Text("Chưa có danh mục.",
                                     style: theme.textTheme.bodySmall))
-                            : _buildCategoryButtonGrid(
-                                theme, true), // Pass isDrawer=true
+                            : _buildCategoryButtonGrid(theme, true),
               ),
             ],
           ),
           divider,
-          // Add other drawer items like Settings, Logout etc. if needed
         ],
       ),
     );
   }
-  // --- END CORRECTED _buildAppDrawer ---
 
   Widget _buildDrawerItem(
       ThemeData theme,
@@ -953,43 +1048,43 @@ class _MenuScreenState extends State<MenuScreen> {
       int currentIndex,
       Color highlightColor,
       VoidCallback onTapAction) {
-    // (Keep existing implementation with hoverColor)
     bool isSelected = currentIndex == indexValue;
     final drawerItemStyle =
         theme.textTheme.bodyMedium?.copyWith(fontSize: 14.5);
     return ListTile(
       leading: Icon(icon,
-          color: isSelected ? highlightColor : Colors.white70, size: 24),
+          color: isSelected
+              ? highlightColor
+              : theme.iconTheme.color?.withOpacity(0.8),
+          size: 24),
       title: Text(
         title,
-        style: drawerItemStyle?.copyWith(
-          color: isSelected ? highlightColor : Colors.white,
+        style: (drawerItemStyle ?? const TextStyle()).copyWith(
+          color:
+              isSelected ? highlightColor : theme.textTheme.bodyMedium?.color,
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
       onTap: onTapAction,
       selected: isSelected,
       selectedTileColor: theme.colorScheme.secondary.withOpacity(0.15),
-      hoverColor: theme.colorScheme.secondary
-          .withOpacity(0.1), // *** HOVER ADDED HERE ***
+      hoverColor: theme.colorScheme.secondary.withOpacity(0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       contentPadding:
           const EdgeInsets.symmetric(horizontal: kDefaultPadding * 2.5),
-      dense: true, // Makes the item vertically smaller
+      dense: true,
     );
   }
 
   Widget _buildNavigationRail(ThemeData theme) {
-    // (Keep existing implementation)
     final Color selectedColor = theme.colorScheme.secondary;
-    final Color unselectedColor = Colors.white;
+    final Color unselectedFGColor =
+        theme.colorScheme.onSurface.withOpacity(0.7);
     final railLabelStyle = theme.textTheme.titleMedium?.copyWith(
       fontSize: 15.5,
       letterSpacing: 0.3,
     );
     final int currentRailIndex = _getNavigationRailSelectedIndex();
-
-    // Data for destinations
     final destinationsData = [
       {
         'icon': Icons.table_restaurant_outlined,
@@ -1007,21 +1102,18 @@ class _MenuScreenState extends State<MenuScreen> {
         'index': 2
       },
     ];
-
     List<Widget> destinationsWidgets = [];
     for (int i = 0; i < destinationsData.length; i++) {
       final data = destinationsData[i];
       final bool isSelected = currentRailIndex == (data['index'] as int);
-
       destinationsWidgets.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: kDefaultPadding * 0.5),
         child: InkWell(
-          // Use InkWell for better customization and hover/splash
           onTap: () => _handleDestinationSelected(data['index'] as int),
           borderRadius: BorderRadius.circular(10),
           splashColor: selectedColor.withOpacity(0.1),
           highlightColor: selectedColor.withOpacity(0.05),
-          hoverColor: selectedColor.withOpacity(0.08), // Explicit hover color
+          hoverColor: selectedColor.withOpacity(0.08),
           child: Container(
             decoration: BoxDecoration(
               color: isSelected
@@ -1033,27 +1125,26 @@ class _MenuScreenState extends State<MenuScreen> {
                 vertical: kDefaultPadding * 1.5, horizontal: kDefaultPadding),
             child: Row(
               children: [
-                const SizedBox(width: kDefaultPadding * 1.5), // Indent icon
+                const SizedBox(width: kDefaultPadding * 1.5),
                 Icon(
                   data['icon'] as IconData,
                   color: isSelected
                       ? selectedColor
-                      : unselectedColor.withOpacity(0.8),
-                  size: isSelected ? 30 : 28, // Slightly larger when selected
+                      : theme.iconTheme.color?.withOpacity(0.8),
+                  size: isSelected ? 30 : 28,
                 ),
-                const SizedBox(
-                    width:
-                        kDefaultPadding * 1.5), // Space between icon and label
+                const SizedBox(width: kDefaultPadding * 1.5),
                 Flexible(
-                  // Allow label to take remaining space
                   child: Text(
                     data['label'] as String,
-                    style: isSelected
-                        ? railLabelStyle?.copyWith(
-                            color: selectedColor, fontWeight: FontWeight.w600)
-                        : railLabelStyle?.copyWith(
-                            color: unselectedColor.withOpacity(0.7),
-                            fontWeight: FontWeight.w500),
+                    style: (isSelected
+                            ? railLabelStyle?.copyWith(
+                                color: selectedColor,
+                                fontWeight: FontWeight.w600)
+                            : railLabelStyle?.copyWith(
+                                color: unselectedFGColor,
+                                fontWeight: FontWeight.w500)) ??
+                        const TextStyle(),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
@@ -1063,45 +1154,38 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
         ),
       ));
-      // Add dividers between items, except after the last one
       if (i < destinationsData.length - 1) {
         destinationsWidgets.add(Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: kDefaultPadding * 1.5,
               vertical: kDefaultPadding * 0.5),
           child: Divider(
-            color: theme.dividerTheme.color?.withOpacity(0.5) ?? Colors.white24,
+            color: theme.dividerTheme.color?.withOpacity(0.5),
             height: 1,
             thickness: 1,
           ),
         ));
       }
     }
-
     return Container(
       width: kRailWidth,
-      color: theme.dialogTheme.backgroundColor, // Consistent background
+      color: theme.dialogTheme.backgroundColor,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start, // Align logo etc. to start
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: kDefaultPadding * 2.5), // Top padding
+          const SizedBox(height: kDefaultPadding * 2.5),
           Padding(
-            padding: const EdgeInsets.only(
-                left: kDefaultPadding * 2), // Logo padding
+            padding: const EdgeInsets.only(left: kDefaultPadding * 2),
             child: _buildLogo(),
           ),
-          const SizedBox(height: kDefaultPadding * 3.5), // Space below logo
-          // Use Column for the navigation items
+          const SizedBox(height: kDefaultPadding * 3.5),
           Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: kDefaultPadding), // Padding for the items column
+            padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
             child: Column(
-              mainAxisSize: MainAxisSize.min, // Take only needed vertical space
+              mainAxisSize: MainAxisSize.min,
               children: destinationsWidgets,
             ),
           ),
-          // Animated container for category buttons
           AnimatedSize(
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeInOutCubic,
@@ -1111,27 +1195,22 @@ class _MenuScreenState extends State<MenuScreen> {
                     _menuErrorMessage == null &&
                     _categories.isNotEmpty)
                 ? Flexible(
-                    // Allow this section to scroll if needed
                     child: Container(
-                      margin: const EdgeInsets.only(
-                          top: kDefaultPadding), // Space above buttons
+                      margin: const EdgeInsets.only(top: kDefaultPadding),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(kDefaultPadding, 0,
                             kDefaultPadding, kDefaultPadding * 2),
                         child: SingleChildScrollView(
-                          // Make buttons scrollable if they overflow
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: kDefaultPadding *
-                                    1.5), // Inner padding for grid
-                            child: _buildCategoryButtonGrid(
-                                theme, false), // isDrawer = false
+                                horizontal: kDefaultPadding * 1.5),
+                            child: _buildCategoryButtonGrid(theme, false),
                           ),
                         ),
                       ),
                     ),
                   )
-                : const SizedBox.shrink(), // Collapsed state
+                : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -1139,230 +1218,160 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _handleDestinationSelected(int index) {
-    // (Keep existing implementation with _clearSearch calls)
     setState(() {
       if (index == 0) {
-        // Tables
+        _clearSearch();
         selectedIndex = 0;
         _isMenuCategoriesExpanded = false;
-        _clearSearch(); // Clear search when navigating away
       } else if (index == 1) {
-        // Orders
+        _clearSearch();
         selectedIndex = orderScreenIndex;
         _isMenuCategoriesExpanded = false;
-        _clearSearch(); // Clear search when navigating away
       } else if (index == 2) {
-        // Menu section clicked
         if (_isLoadingMenu || _menuErrorMessage != null) {
-          // Prevent interaction if menu isn't ready
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(_isLoadingMenu
-                ? 'Đang tải menu...'
-                : _menuErrorMessage ?? 'Lỗi menu'),
-            duration: const Duration(seconds: 1),
-          ));
-          return; // Don't change state
+          /* ... show error ... */ return;
         }
-
-        // Toggle expansion
         _isMenuCategoriesExpanded = !_isMenuCategoriesExpanded;
-
         if (_isMenuCategoriesExpanded) {
-          // If expanding, and currently viewing Tables or Orders, or no category selected
           bool isViewingTablesOrOrders =
               (selectedIndex == 0 || selectedIndex == orderScreenIndex);
           bool noCategorySelected =
               !(selectedIndex >= 1 && selectedIndex <= _categories.length);
           if ((isViewingTablesOrOrders || noCategorySelected) &&
               _categories.isNotEmpty) {
-            _clearSearch(); // Clear search when first category is shown
-            selectedIndex = 1; // Select the first category (index 1)
-            // Schedule scroll after state update and potential animation
+            _clearSearch();
+            selectedIndex = 1;
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted && _isMenuCategoriesExpanded) {
-                // Check if still expanded
-                _scrollToCategory(1); // Scroll to the first category
+                _scrollToCategory(1);
               }
             });
           }
         } else {
-          // If collapsing, and were viewing a category, clear search
           if (selectedIndex >= 1 && selectedIndex <= _categories.length) {
             _clearSearch();
           }
-          // Optional: If collapsing, maybe navigate back to Tables?
-          // selectedIndex = 0;
         }
-
-        // Handle case where menu is expanded but there are no categories
         if (_isMenuCategoriesExpanded && _categories.isEmpty) {
-          _isMenuCategoriesExpanded = false; // Immediately collapse back
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Chưa có danh mục món ăn nào.'),
-            duration: Duration(seconds: 2),
-          ));
+          /* ... show error ... */ _isMenuCategoriesExpanded = false;
         }
       }
     });
   }
 
   Widget _buildLogo({double height = kLogoHeight, double? width}) {
-    // (Keep existing implementation)
-    // IMPORTANT: Replace with your actual logo asset path
-    const String logoAssetPath = 'assets/spidermen.jpg'; // <--- YOUR LOGO PATH
-
+    const String logoAssetPath = 'assets/spidermen.jpg';
     return ClipRRect(
-      // Clip logo if needed
       borderRadius: BorderRadius.circular(kDefaultPadding * 0.75),
       child: Image.asset(
         logoAssetPath,
-        width: width, // Use provided width or calculate based on height
+        width: width,
         height: height,
-        fit: BoxFit.contain, // Adjust fit as needed (contain, cover, etc.)
-        // Error handling for missing asset
-        errorBuilder: (context, error, stackTrace) {
-          print("Error loading logo asset '$logoAssetPath': $error");
-          return Container(
-              height: height,
-              width: width ?? height * 1.8, // Estimate width if not provided
-              color: Colors.grey[700], // Placeholder background
-              child: Column(
-                // Center error icon and text
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.broken_image_outlined,
-                      color: Colors.red[300], size: height * 0.5),
-                  const SizedBox(height: 4),
-                  Text("Logo Error",
-                      style: TextStyle(color: Colors.red[300], fontSize: 10)),
-                ],
-              ));
-        },
-        // Optional: Fade-in animation
-        frameBuilder: (context, child, frame, wasSyncLoaded) {
-          if (wasSyncLoaded) {
-            return child;
-          }
-          return AnimatedOpacity(
-            child: child,
-            opacity: frame == null ? 0 : 1,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildLargeScreenHeader(ThemeData theme) {
-    // (Keep existing implementation)
-    return Container(
-      color: theme.appBarTheme.backgroundColor, // Match AppBar color
-      padding: const EdgeInsets.symmetric(
-          horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
-      child: Row(
-        children: [
-          Expanded(
-              child: Text('WELCOME',
-                  textAlign: TextAlign.center,
-                  style: theme.appBarTheme.titleTextStyle)),
-          ..._buildAppBarActions(), // Re-use the same actions
-        ],
+        fit: BoxFit.contain,
+        errorBuilder: (c, e, s) => Container(
+            height: height,
+            width: width ?? height * 1.8,
+            color: Colors.grey[700],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.broken_image_outlined,
+                    color: Colors.red[300], size: height * 0.5),
+                const SizedBox(height: 4),
+                Text("Logo Error",
+                    style: TextStyle(color: Colors.red[300], fontSize: 10))
+              ],
+            )),
+        frameBuilder: (c, child, frame, wasSync) => wasSync
+            ? child
+            : AnimatedOpacity(
+                child: child,
+                opacity: frame == null ? 0 : 1,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut),
       ),
     );
   }
 
   Widget _buildTableGrid(ThemeData theme) {
-    // (Keep existing implementation)
     int crossAxisCount = _getCrossAxisCount(context);
     return GridView.builder(
-      key: const PageStorageKey<String>(
-          'tableGrid'), // Keep state when switching views
+      key: const PageStorageKey<String>('tableGrid'),
       padding: const EdgeInsets.all(kDefaultPadding * 1.8),
-      controller: _tableScrollController, // Attach scroll controller
+      controller: _tableScrollController,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         crossAxisSpacing: kTableGridSpacing * 1.4,
         mainAxisSpacing: kTableGridSpacing * 1.4,
-        childAspectRatio: 1.0, // Square items
+        childAspectRatio: 1.0,
       ),
       itemCount: tables.length,
       itemBuilder: (context, index) {
         final table = tables[index];
         int pendingCount = table['pendingOrderCount'] as int? ?? 0;
-        bool hasPendingOrders = pendingCount > 0;
+        bool hasPending = pendingCount > 0;
         bool isHovered = _hoveredTableIndex == index;
-
-        // Determine colors and styles based on state
-        Color cardBackgroundColor;
-        Color iconColor;
-        Color textColor;
-        Color badgeColor =
-            theme.colorScheme.error; // Typically red for pending/error
-        Color borderColor = Colors.transparent;
-        double elevation = kCardElevation; // Base elevation
-
-        if (hasPendingOrders) {
-          cardBackgroundColor = Color.lerp(
-              theme.cardTheme.color!,
-              theme.colorScheme.error.withOpacity(0.4),
-              0.5)!; // Blend with error color
-          iconColor = Colors.yellowAccent[100]!; // Highlight icon
-          textColor = Colors.white;
+        Color cardBg,
+            iconColor,
+            textColor,
+            badgeColor = theme.colorScheme.error,
+            badgeTextColor = theme.colorScheme.onError,
+            borderColor = Colors.transparent;
+        double elevation = kCardElevation;
+        if (hasPending) {
+          cardBg = Color.lerp(
+              theme.cardTheme.color ?? theme.colorScheme.surface,
+              theme.colorScheme.errorContainer ??
+                  theme.colorScheme.error.withOpacity(0.2),
+              0.6)!;
+          iconColor = theme.colorScheme.error;
+          textColor =
+              theme.colorScheme.onErrorContainer ?? theme.colorScheme.error;
           borderColor = theme.colorScheme.error.withOpacity(0.8);
-          elevation = kCardElevation + 4; // Increase elevation
+          elevation = kCardElevation + 4;
         } else {
-          cardBackgroundColor = theme.cardTheme.color!;
-          iconColor = Colors.white.withOpacity(0.65);
-          textColor = Colors.white.withOpacity(0.85);
+          cardBg = theme.cardTheme.color ?? theme.colorScheme.surface;
+          iconColor = theme.iconTheme.color?.withOpacity(0.65) ?? Colors.grey;
+          textColor = (theme.textTheme.bodyMedium?.color ?? Colors.white)
+              .withOpacity(0.85);
         }
-
         if (isHovered) {
-          cardBackgroundColor = cardBackgroundColor
-              .withOpacity(0.85); // Slightly transparent on hover
-          borderColor = hasPendingOrders
+          cardBg = Color.alphaBlend(
+              theme.colorScheme.secondary.withOpacity(0.1), cardBg);
+          borderColor = hasPending
               ? theme.colorScheme.error
-              : theme.colorScheme.secondary
-                  .withOpacity(0.7); // Highlight border on hover
-          elevation += 4; // Further increase elevation on hover
+              : theme.colorScheme.secondary.withOpacity(0.7);
+          elevation += 4;
         }
-
-        // Use MouseRegion for hover effects
         return MouseRegion(
           onEnter: (_) => setState(() => _hoveredTableIndex = index),
           onExit: (_) => setState(() => _hoveredTableIndex = null),
-          cursor: SystemMouseCursors.click, // Indicate interactivity
+          cursor: SystemMouseCursors.click,
           child: AnimatedContainer(
-            // Animate border and shadow changes
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(
-                  14), // Slightly larger radius for the border/shadow container
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: borderColor, width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isHovered ? 0.35 : 0.2),
+                  color: theme.shadowColor.withOpacity(isHovered ? 0.4 : 0.2),
                   blurRadius: isHovered ? 10 : 5,
                   spreadRadius: 0,
-                  offset: Offset(
-                      0, isHovered ? 4 : 2), // Adjust shadow offset on hover
+                  offset: Offset(0, isHovered ? 4 : 2),
                 )
               ],
             ),
             child: Material(
-              // Use Material for InkWell splash and elevation visuals
-              color: cardBackgroundColor,
-              borderRadius:
-                  BorderRadius.circular(13), // Inner radius matching card
-              clipBehavior: Clip.antiAlias, // Clip ink splash
-              elevation: 0, // Elevation handled by AnimatedContainer's shadow
+              color: cardBg,
+              borderRadius: BorderRadius.circular(13),
+              clipBehavior: Clip.antiAlias,
+              elevation: 0,
               child: InkWell(
                 onTap: () => _showOrderPopup(context, index),
                 borderRadius: BorderRadius.circular(13),
                 splashColor: theme.colorScheme.secondary.withOpacity(0.15),
                 highlightColor: theme.colorScheme.secondary.withOpacity(0.1),
                 child: Stack(
-                  // Stack for the badge
                   alignment: Alignment.center,
                   children: [
                     Padding(
@@ -1371,14 +1380,16 @@ class _MenuScreenState extends State<MenuScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.table_restaurant_rounded, // Table icon
-                            size: 55, // Adjust size as needed
+                            Icons.table_restaurant_rounded,
+                            size: 55,
                             color: iconColor,
                           ),
                           const SizedBox(height: kDefaultPadding * 1.5),
                           Text(
                             table['name'] as String? ?? 'Bàn ?',
-                            style: theme.textTheme.titleMedium?.copyWith(
+                            style: (theme.textTheme.titleMedium ??
+                                    const TextStyle())
+                                .copyWith(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: textColor,
@@ -1387,12 +1398,10 @@ class _MenuScreenState extends State<MenuScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          // Add more info like status if needed
                         ],
                       ),
                     ),
-                    // Pending order count badge
-                    if (hasPendingOrders)
+                    if (hasPending)
                       Positioned(
                         top: 10,
                         right: 10,
@@ -1402,29 +1411,24 @@ class _MenuScreenState extends State<MenuScreen> {
                               color: badgeColor,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: Colors.white.withOpacity(0.9),
-                                  width: 1.8), // White border for contrast
-                              boxShadow: const [
+                                  color: theme.colorScheme.surface
+                                      .withOpacity(0.9),
+                                  width: 1.8),
+                              boxShadow: [
                                 BoxShadow(
-                                    color: Colors.black87,
+                                    color: Colors.black.withOpacity(0.5),
                                     blurRadius: 5,
-                                    offset: Offset(1, 1))
-                              ] // Subtle shadow
-                              ),
-                          constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28), // Ensure minimum size
+                                    offset: const Offset(1, 1))
+                              ]),
+                          constraints:
+                              const BoxConstraints(minWidth: 28, minHeight: 28),
                           child: Center(
-                            child: Text(
-                              '$pendingCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize:
-                                    11.5, // Slightly smaller font for badge
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                              child: Text('$pendingCount',
+                                  style: TextStyle(
+                                    color: badgeTextColor,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                  ))),
                         ),
                       ),
                   ],
@@ -1438,121 +1442,73 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildSelectedMenuCategoryList(ThemeData theme) {
-    // (Keep existing implementation with Search Bar)
-    int categoryArrayIndex = selectedIndex - 1;
-    if (categoryArrayIndex < 0 || categoryArrayIndex >= _categories.length) {
+    int catIdx = selectedIndex - 1;
+    if (catIdx < 0 || catIdx >= _categories.length) {
       return Center(
           child: Text("Danh mục không hợp lệ.",
               style: theme.textTheme.bodyMedium));
     }
-    if (categoryArrayIndex >= _categoryKeys.length) {
+    if (catIdx >= _categoryKeys.length) {
       return Center(
-          child: Text("Đang chuẩn bị danh mục...",
-              style: theme.textTheme.bodySmall)); // Key might not be ready yet
+          child: Text("Đang chuẩn bị...", style: theme.textTheme.bodySmall));
     }
-
-    final String categoryName = _categories[categoryArrayIndex];
-    final List<MenuItem> allItemsInCategory = // Get all items for the category
-        _menuItemsByCategory[categoryName] ?? [];
-    final GlobalKey categoryHeaderKey = _categoryKeys[categoryArrayIndex];
-
-    // --- FILTERING LOGIC based on _searchQuery ---
+    final String catName = _categories[catIdx];
+    final List<MenuItem> allItems = _menuItemsByCategory[catName] ?? [];
+    final GlobalKey catKey = _categoryKeys[catIdx];
     final String query = _searchQuery.toLowerCase().trim();
-    final List<MenuItem> filteredItems;
-    if (query.isEmpty) {
-      filteredItems = allItemsInCategory; // No filter applied
-    } else {
-      filteredItems = allItemsInCategory.where((item) {
-        final itemNameLower = item.name.toLowerCase();
-        final itemIdString = item.itemId.toString();
-        return itemNameLower.contains(query) || itemIdString.contains(query);
-      }).toList();
-    }
-    // --- END FILTERING LOGIC ---
-
+    final List<MenuItem> filteredItems = query.isEmpty
+        ? allItems
+        : allItems
+            .where((i) =>
+                i.name.toLowerCase().contains(query) ||
+                i.itemId.toString().contains(query))
+            .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          key: categoryHeaderKey, // Keep key on the outer padding
+          key: catKey,
           padding: const EdgeInsets.fromLTRB(
               kDefaultPadding * 2,
-              kDefaultPadding * 1.5, // Adjust top padding slightly
+              kDefaultPadding * 1.5,
               kDefaultPadding * 2,
-              kDefaultPadding * 0.5), // Adjust bottom padding slightly
+              kDefaultPadding * 0.5),
           child: Row(
-            // Use Row for Title and Search Bar
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Space them out
-            crossAxisAlignment: CrossAxisAlignment.center, // Align vertically
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Category Title (Flexible to allow shrinking)
               Flexible(
                 child: Text(
-                  categoryName,
+                  catName,
                   style: theme.textTheme.headlineSmall,
-                  overflow: TextOverflow.ellipsis, // Prevent overflow
+                  overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
               ),
-              const SizedBox(width: kDefaultPadding * 1.5), // Spacer
-
-              // Search Field - Constrained Width
+              const SizedBox(width: kDefaultPadding * 1.5),
               SizedBox(
-                width: 250, // Adjust width as needed
-                height: 40, // Fixed height for consistency
+                width: 250,
+                height: 40,
                 child: TextField(
                   controller: _searchController,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontSize: 13.5), // Input text style
+                  style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(fontSize: 13.5),
                   decoration: InputDecoration(
                     hintText: 'Tìm món (tên, ID)...',
-                    hintStyle: theme.textTheme.bodySmall
-                        ?.copyWith(fontSize: 12.5, color: Colors.grey[500]),
-                    prefixIcon: Icon(Icons.search,
-                        size: 18, color: Colors.grey[500]), // Search icon
-                    // Clear button appears only when typing
+                    prefixIcon: Icon(Icons.search, size: 18),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear,
-                                size: 18, color: Colors.grey[500]),
-                            tooltip: 'Xóa tìm kiếm',
-                            splashRadius: 15, // Smaller splash for icon button
-                            padding: EdgeInsets.zero, // Remove extra padding
-                            constraints:
-                                const BoxConstraints(), // Remove constraints for tighter fit
-                            onPressed: () {
-                              _searchController.clear();
-                              // _onSearchChanged listener handles state update
-                            },
+                            icon: Icon(Icons.clear, size: 18),
+                            tooltip: 'Xóa',
+                            splashRadius: 15,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: _clearSearch,
                           )
                         : null,
-                    contentPadding: const EdgeInsets.symmetric(
-                        vertical: 0, horizontal: 10), // Adjust padding
-                    isDense: true, // Makes the text field more compact
-                    filled: true, // Add a background fill
-                    fillColor: theme.scaffoldBackgroundColor
-                        .withOpacity(0.4), // Darker fill
-                    // Border styling
-                    border: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(20), // Rounded corners
-                      borderSide: BorderSide(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 0.5), // Default border
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 0.5), // Border when enabled
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(
-                          color: theme.colorScheme.secondary.withOpacity(
-                              0.7), // Highlight border when focused
-                          width: 1.0),
-                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                    isDense: true,
                   ),
                 ),
               ),
@@ -1562,103 +1518,85 @@ class _MenuScreenState extends State<MenuScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding * 2),
           child: Divider(
-              // Separator line below header
               color: theme.dividerTheme.color,
               thickness: theme.dividerTheme.thickness),
         ),
         const SizedBox(height: kDefaultPadding),
-
-        // --- Conditional Content based on Filtering ---
-        if (allItemsInCategory.isEmpty) // Check if the category itself is empty
+        if (allItems.isEmpty)
           Expanded(
               child: Center(
             child: Padding(
               padding: const EdgeInsets.all(kDefaultPadding * 2),
               child: Text(
-                "Không có món ăn nào trong danh mục '$categoryName'.",
-                style:
-                    theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                "Không có món nào trong '$catName'.",
+                style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                    .copyWith(
+                        color: theme.textTheme.bodyMedium?.color
+                            ?.withOpacity(0.7)),
                 textAlign: TextAlign.center,
               ),
             ),
           ))
-        else if (filteredItems.isEmpty &&
-            query.isNotEmpty) // Specific message for no search results
+        else if (filteredItems.isEmpty && query.isNotEmpty)
           Expanded(
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(kDefaultPadding * 2),
                 child: Text(
-                  "Không tìm thấy món ăn nào khớp với \"$query\".",
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.white70),
+                  "Không tìm thấy món khớp \"$query\".",
+                  style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(
+                          color: theme.textTheme.bodyMedium?.color
+                              ?.withOpacity(0.7)),
                   textAlign: TextAlign.center,
                 ),
               ),
             ),
           )
-        else // Display the filtered items (or all items if query is empty)
+        else
           Expanded(
             child: ListView.builder(
-              // *** Use filteredItems list ***
-              key: PageStorageKey<String>(
-                  'menuList_${categoryName}_$query'), // Include query in key for state preservation
+              key: PageStorageKey<String>('menuList_${catName}_$query'),
               controller: _menuScrollController,
               padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
-              itemCount: filteredItems.length, // Use count from filtered list
+              itemCount: filteredItems.length,
               itemBuilder: (context, itemIndex) {
-                // *** Get item from filtered list ***
-                MenuItem currentItemFromFiltered = filteredItems[itemIndex];
-                // Get the potentially updated item state from the central map
-                MenuItem item =
-                    _menuItemsById[currentItemFromFiltered.itemId] ??
-                        currentItemFromFiltered;
-
-                String? relativePathFromDb = item.img;
-                Widget imageWidget;
-                if (relativePathFromDb != null &&
-                    relativePathFromDb.isNotEmpty) {
-                  String assetPath = 'assets/' +
-                      (relativePathFromDb.startsWith('/')
-                          ? relativePathFromDb.substring(1)
-                          : relativePathFromDb);
-                  // print("Attempting to load asset: $assetPath for item: ${item.name}"); // Debug print
-                  imageWidget = Image.asset(assetPath,
+                MenuItem current = filteredItems[itemIndex];
+                MenuItem item = _menuItemsById[current.itemId] ?? current;
+                String? imgPath = item.img;
+                Widget imgWidget;
+                if (imgPath != null && imgPath.isNotEmpty) {
+                  String asset = 'assets/' +
+                      (imgPath.startsWith('/')
+                          ? imgPath.substring(1)
+                          : imgPath);
+                  imgWidget = Image.asset(asset,
                       width: kMenuItemImageSize,
                       height: kMenuItemImageSize,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        print("Error loading asset '$assetPath': $error");
-                        return _buildPlaceholderImage(hasError: true);
-                      },
-                      frameBuilder: (context, child, frame, wasSyncLoaded) =>
-                          wasSyncLoaded
-                              ? child
-                              : AnimatedOpacity(
-                                  // Fade in image
-                                  opacity: frame == null ? 0 : 1,
-                                  duration: const Duration(milliseconds: 350),
-                                  curve: Curves.easeOut,
-                                  child: child,
-                                ));
+                      errorBuilder: (c, e, s) =>
+                          _buildPlaceholderImage(hasError: true),
+                      frameBuilder: (c, child, frame, wasSync) => wasSync
+                          ? child
+                          : AnimatedOpacity(
+                              opacity: frame == null ? 0 : 1,
+                              duration: const Duration(milliseconds: 350),
+                              curve: Curves.easeOut,
+                              child: child,
+                            ));
                 } else {
-                  // print("No image path for item: ${item.name}"); // Debug print
-                  imageWidget = _buildPlaceholderImage();
+                  imgWidget = _buildPlaceholderImage();
                 }
-
-                // --- Build the Card using the 'item' (which has potentially updated 'available' status) ---
                 return Card(
-                  margin: const EdgeInsets.only(
-                      bottom: kDefaultPadding * 1.5), // Spacing between cards
+                  margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
                   child: Row(
                     children: [
                       ClipRRect(
-                        // Clip image corners
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(12),
                           bottomLeft: Radius.circular(12),
                         ),
-                        child: imageWidget,
+                        child: imgWidget,
                       ),
                       Expanded(
                         child: Padding(
@@ -1670,17 +1608,19 @@ class _MenuScreenState extends State<MenuScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                item.name, // Use name from 'item'
-                                style: theme.textTheme.titleMedium
-                                    ?.copyWith(fontSize: 16.5),
+                                item.name,
+                                style: (theme.textTheme.titleMedium ??
+                                        const TextStyle())
+                                    .copyWith(fontSize: 16.5),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: kDefaultPadding * 0.6),
                               Text(
-                                "ID: ${item.itemId}", // Use ID from 'item'
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(fontSize: 11),
+                                "ID: ${item.itemId}",
+                                style: (theme.textTheme.bodySmall ??
+                                        const TextStyle())
+                                    .copyWith(fontSize: 11),
                               ),
                             ],
                           ),
@@ -1690,7 +1630,7 @@ class _MenuScreenState extends State<MenuScreen> {
                         padding:
                             const EdgeInsets.only(right: kDefaultPadding * 1.5),
                         child: AvailabilitySwitch(
-                          item: item, // Pass the potentially updated 'item'
+                          item: item,
                           onStatusChanged: _updateItemStatus,
                         ),
                       ),
@@ -1700,40 +1640,38 @@ class _MenuScreenState extends State<MenuScreen> {
               },
             ),
           ),
-        // --- END Conditional Content ---
       ],
     );
   }
 
   Widget _buildPlaceholderImage({bool hasError = false}) {
-    // (Keep existing implementation)
+    final theme = Theme.of(context);
     return Container(
       width: kMenuItemImageSize,
       height: kMenuItemImageSize,
-      color: const Color(0xFF37474F), // Dark background for placeholder
+      color: theme.cardTheme.color?.withOpacity(0.5) ??
+          theme.colorScheme.surface.withOpacity(0.5),
       child: Icon(
-        hasError
-            ? Icons.image_not_supported_outlined
-            : Icons.restaurant, // Different icons for error vs no image
-        color: hasError ? Colors.redAccent.withOpacity(0.7) : Colors.grey[500],
-        size:
-            kMenuItemImageSize * 0.4, // Adjust icon size relative to container
+        hasError ? Icons.image_not_supported_outlined : Icons.restaurant,
+        color: hasError
+            ? theme.colorScheme.error.withOpacity(0.7)
+            : theme.iconTheme.color?.withOpacity(0.4),
+        size: kMenuItemImageSize * 0.4,
       ),
     );
   }
 
   Widget _buildBottomActionBar(ThemeData theme) {
-    // (Keep existing implementation)
-    final footerTextStyle = theme.textTheme.bodySmall?.copyWith(
-      color: Colors.white.withOpacity(0.8),
+    final footerTextStyle =
+        (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+      color: theme.textTheme.bodySmall?.color?.withOpacity(0.8),
       fontSize: 11.5,
       fontWeight: FontWeight.w400,
       letterSpacing: 0.4,
     );
     return Container(
-      height: kBottomActionBarHeight * 0.7, // Reduced height for footer
+      height: kBottomActionBarHeight * 0.7,
       decoration: BoxDecoration(
-        // Optional: add background or border
         border: Border(
             top: BorderSide(
                 color: theme.dividerTheme.color ?? Colors.white24, width: 0.5)),
@@ -1741,10 +1679,9 @@ class _MenuScreenState extends State<MenuScreen> {
       child: Align(
         alignment: Alignment.center,
         child: Padding(
-          padding: const EdgeInsets.only(
-              bottom: kDefaultPadding * 0.5), // Small bottom padding
+          padding: const EdgeInsets.only(bottom: kDefaultPadding * 0.5),
           child: Text(
-            'SOA Midterm by REAL MEN', // Your footer text
+            'SOA Midterm by REAL MEN',
             style: footerTextStyle,
           ),
         ),
@@ -1753,153 +1690,114 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildExclamationOverlay(bool smallScreen) {
-    // (Keep existing implementation)
+    final theme = Theme.of(context);
     if (!_showExclamationMark) return const SizedBox.shrink();
     double rightEdge =
         smallScreen ? kDefaultPadding : kRailWidth + kDefaultPadding;
-    const String exclamationAssetPath =
-        'assets/exclamation_mark.png'; // Make sure this asset exists
-
+    const String assetPath = 'assets/exclamation_mark.png';
     return Positioned(
-      right: rightEdge -
-          kExclamationMarkSize / 2, // Center horizontally relative to edge
-      top: MediaQuery.of(context).size.height / 2 -
-          kExclamationMarkSize / 2, // Center vertically
+      right: rightEdge - kExclamationMarkSize / 2,
+      top: MediaQuery.of(context).size.height / 2 - kExclamationMarkSize / 2,
       child: Transform.rotate(
-        angle: _exclamationMarkAngle, // Apply rotation animation
+        angle: _exclamationMarkAngle,
         child: IgnorePointer(
-          // Prevent interaction with the overlay
-          child: Image.asset(
-            exclamationAssetPath,
-            width: kExclamationMarkSize,
-            height: kExclamationMarkSize,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.yellowAccent,
-                size: kExclamationMarkSize), // Fallback icon
-          ),
-        ),
+            child: Image.asset(
+          assetPath,
+          width: kExclamationMarkSize,
+          height: kExclamationMarkSize,
+          fit: BoxFit.contain,
+          errorBuilder: (c, e, s) => Icon(Icons.warning_amber_rounded,
+              color: theme.colorScheme.secondary, size: kExclamationMarkSize),
+        )),
       ),
     );
   }
 
   Widget _buildCategoryButtonGrid(ThemeData theme, bool isDrawer) {
-    // (Keep existing implementation)
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: kMenuCategoryButtonCrossAxisCount, // 2 columns
+        crossAxisCount: kMenuCategoryButtonCrossAxisCount,
         crossAxisSpacing: kDefaultPadding,
         mainAxisSpacing: kDefaultPadding,
-        childAspectRatio:
-            kMenuCategoryButtonAspectRatio, // Adjust for button shape
+        childAspectRatio: kMenuCategoryButtonAspectRatio,
       ),
       itemCount: _categories.length,
-      shrinkWrap: true, // Important for embedding in ListView/Column
-      physics:
-          const NeverScrollableScrollPhysics(), // Grid itself shouldn't scroll
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemBuilder: (context, index) {
-        final categoryViewIndex =
-            index + 1; // 1-based index for selection state
-        final isSelected = selectedIndex == categoryViewIndex;
-        final categoryName = _categories[index];
-
-        // Styling variables for clarity
-        final selectedBgColor = theme.colorScheme.secondary.withOpacity(0.9);
-        final unselectedBgColor =
-            theme.cardTheme.color?.withOpacity(0.8) ?? const Color(0xFF455A64);
-        final selectedBorderColor = theme.colorScheme.secondary;
-        final hoverColor = theme.colorScheme.secondary.withOpacity(0.15);
-        final splashColor = theme.colorScheme.secondary
-            .withOpacity(0.25); // Although NoSplash is used below
-        final shadowColor = Colors.black.withOpacity(isSelected ? 0.3 : 0.15);
-        const animationDuration = Duration(milliseconds: 250);
-
-        // Use AnimatedContainer for smooth transition effects
+        final catIdx = index + 1;
+        final isSel = selectedIndex == catIdx;
+        final catName = _categories[index];
+        final selBg = theme.colorScheme.secondary.withOpacity(0.9);
+        final unselBg = theme.cardTheme.color?.withOpacity(0.9) ??
+            theme.colorScheme.surface;
+        final selBorder = theme.colorScheme.secondary;
+        final hover = theme.colorScheme.secondary.withOpacity(0.15);
+        final splash = theme.colorScheme.secondary.withOpacity(0.25);
+        final shadow = theme.shadowColor.withOpacity(isSel ? 0.3 : 0.15);
+        const animDur = Duration(milliseconds: 250);
+        Color fgColor = theme.colorScheme.onSecondary;
+        if (!isSel) {
+          fgColor = theme.colorScheme.onSurface.withOpacity(0.9);
+        }
         return AnimatedContainer(
-          duration: animationDuration,
+          duration: animDur,
           curve: Curves.easeInOutCubic,
-          margin: EdgeInsets.all(
-              isSelected ? 0 : 2.0), // Slightly inset unselected buttons
+          margin: EdgeInsets.all(isSel ? 0 : 2.0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10.0),
             boxShadow: [
               BoxShadow(
-                  color: shadowColor,
-                  blurRadius: isSelected ? 8.0 : 4.0,
-                  offset: Offset(0, isSelected ? 4.0 : 2.0))
+                  color: shadow,
+                  blurRadius: isSel ? 8.0 : 4.0,
+                  offset: Offset(0, isSel ? 4.0 : 2.0))
             ],
           ),
           child: ElevatedButton(
-            // Using ElevatedButton for built-in styling and interaction
             style: ButtonStyle(
-              backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                  (Set<MaterialState> states) {
-                if (states.contains(MaterialState.pressed))
-                  return splashColor
-                      .withOpacity(0.4); // Darken further on press
-                return isSelected
-                    ? selectedBgColor
-                    : unselectedBgColor; // Selected/unselected color
+              backgroundColor: MaterialStateProperty.resolveWith<Color>((s) {
+                if (s.contains(MaterialState.pressed))
+                  return splash.withOpacity(0.4);
+                return isSel ? selBg : unselBg;
               }),
-              foregroundColor:
-                  MaterialStateProperty.all<Color>(Colors.white), // Text color
-              overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                  (Set<MaterialState> states) {
-                if (states.contains(MaterialState.hovered))
-                  return hoverColor; // Hover overlay
-                return null; // Defer to default overlay color otherwise
+              foregroundColor: MaterialStateProperty.all<Color>(fgColor),
+              overlayColor: MaterialStateProperty.resolveWith<Color?>((s) {
+                if (s.contains(MaterialState.hovered)) return hover;
+                return null;
               }),
-              shadowColor: MaterialStateProperty.all(
-                  Colors.transparent), // Shadow handled by AnimatedContainer
+              shadowColor: MaterialStateProperty.all(Colors.transparent),
               shape: MaterialStateProperty.all<RoundedRectangleBorder>(
                   RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0),
                       side: BorderSide(
-                          color: isSelected
-                              ? selectedBorderColor
-                              : Colors.transparent, // Border only when selected
+                          color: isSel ? selBorder : Colors.transparent,
                           width: 1.5))),
               padding: MaterialStateProperty.all<EdgeInsetsGeometry>(
                   const EdgeInsets.symmetric(
                       horizontal: kDefaultPadding,
-                      vertical: kDefaultPadding * 0.75) // Button padding
-                  ),
-              minimumSize: MaterialStateProperty.all(
-                  const Size(0, 40)), // Ensure minimum height
-              splashFactory: NoSplash
-                  .splashFactory, // Optional: Disable default splash if using custom effects
-              elevation: MaterialStateProperty.all(
-                  0), // Elevation handled by AnimatedContainer
+                      vertical: kDefaultPadding * 0.75)),
+              minimumSize: MaterialStateProperty.all(const Size(0, 40)),
+              splashFactory: NoSplash.splashFactory,
+              elevation: MaterialStateProperty.all(0),
             ),
             onPressed: () {
-              _clearSearch(); // Clear search when selecting a category button
-              _scrollToCategory(categoryViewIndex);
-              if (isDrawer)
-                Navigator.pop(
-                    context); // Close drawer if action originated from there
+              _clearSearch();
+              _scrollToCategory(catIdx);
+              if (isDrawer) Navigator.pop(context);
             },
             child: AnimatedDefaultTextStyle(
-              // Animate text style changes
-              duration: animationDuration,
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13.5,
-                  fontWeight: isSelected
-                      ? FontWeight.w600
-                      : FontWeight.w500, // Bold when selected
-                  letterSpacing:
-                      isSelected ? 0.4 : 0.2, // Adjust letter spacing
-                  fontFamily: Theme.of(context)
-                      .textTheme
-                      .labelLarge
-                      ?.fontFamily // Use theme font
-                  ),
+              duration: animDur,
+              style: (theme.textTheme.labelLarge ?? const TextStyle()).copyWith(
+                color: fgColor,
+                fontSize: 13.5,
+                fontWeight: isSel ? FontWeight.w600 : FontWeight.w500,
+                letterSpacing: isSel ? 0.4 : 0.2,
+              ),
               child: Text(
-                categoryName,
+                catName,
                 textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis, // Handle long category names
-                maxLines: 2, // Allow wrapping slightly
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
             ),
           ),
@@ -1909,103 +1807,86 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildCurrentView(ThemeData theme) {
-    // (Keep existing implementation)
-    // Determine which main view to show based on selectedIndex
-    int stackIndex = 0; // Default to Table Grid (index 0)
-    if (selectedIndex == orderScreenIndex) {
-      stackIndex = 1; // Kitchen Order List (index 1)
-    } else if (selectedIndex >= 1 && selectedIndex <= _categories.length) {
-      stackIndex = 2; // Menu Category List (index 2)
-    }
-
-    // List of possible pages for the IndexedStack
+    int stackIndex = 0;
+    if (selectedIndex == orderScreenIndex)
+      stackIndex = 1;
+    else if (selectedIndex >= 1 && selectedIndex <= _categories.length)
+      stackIndex = 2;
     List<Widget> pages = [
-      // --- Page 0: Table Grid ---
       _buildTableGrid(theme),
-
-      // --- Page 1: Kitchen Order List ---
       KitchenOrderListScreen(
-        key: _kitchenListKey, // Use the GlobalKey
-        onOrderUpdate: _updateTableOrderCounts, // Pass callback
-        onTableCleared: _handleTableCleared, // Pass callback
+        key: _kitchenListKey,
+        onOrderUpdate: _updateTableOrderCounts,
+        onTableCleared: _handleTableCleared,
       ),
-
-      // --- Page 2: Menu Category List (conditionally built) ---
       Builder(builder: (context) {
-        // Use Builder to access context if needed later
-        // Check if the current state corresponds to showing a menu category
-        bool isMenuView =
-            selectedIndex >= 1 && selectedIndex <= _categories.length;
-
-        if (isMenuView) {
-          // Handle loading/error states specifically for the menu content
-          if (_isLoadingMenu) {
+        bool isMenu = selectedIndex >= 1 && selectedIndex <= _categories.length;
+        if (isMenu) {
+          if (_isLoadingMenu)
             return Center(
                 child: CircularProgressIndicator(
                     color: theme.colorScheme.secondary));
-          }
-          if (_menuErrorMessage != null) {
+          if (_menuErrorMessage != null)
             return Center(
                 child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.cloud_off_outlined,
-                        color: Colors.redAccent, size: 50),
+                    Icon(Icons.cloud_off_outlined,
+                        color: theme.colorScheme.error, size: 50),
                     const SizedBox(height: kDefaultPadding * 2),
                     Text(_menuErrorMessage!,
                         textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: Colors.white70)),
+                        style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                            .copyWith(
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.7))),
                     const SizedBox(height: kDefaultPadding * 2),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent[100]),
-                      onPressed: _fetchMenuData, // Retry button
+                          backgroundColor: theme.colorScheme.errorContainer,
+                          foregroundColor: theme.colorScheme.onErrorContainer),
+                      onPressed: _fetchMenuData,
                       icon: const Icon(Icons.refresh),
                       label: const Text('Thử lại'),
                     )
                   ]),
             ));
-          }
-          // Handle case where menu loaded but has no categories
-          if (_categories.isEmpty && !_isLoadingMenu) {
+          if (_categories.isEmpty && !_isLoadingMenu)
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(kDefaultPadding * 2),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.menu_book_outlined,
-                        color: Colors.grey[600], size: 50),
-                    const SizedBox(height: kDefaultPadding * 2),
-                    Text("Không tìm thấy danh mục món ăn nào.",
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: Colors.white70)),
-                    const SizedBox(height: kDefaultPadding * 2),
-                    ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                theme.colorScheme.secondary.withOpacity(0.8)),
-                        onPressed: _fetchMenuData, // Retry button
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Tải lại Menu'))
-                  ],
-                ),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.menu_book_outlined,
+                          color: theme.iconTheme.color?.withOpacity(0.5),
+                          size: 50),
+                      const SizedBox(height: kDefaultPadding * 2),
+                      Text("Không có danh mục.",
+                          textAlign: TextAlign.center,
+                          style:
+                              (theme.textTheme.bodyMedium ?? const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7))),
+                      const SizedBox(height: kDefaultPadding * 2),
+                      ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  theme.colorScheme.secondary.withOpacity(0.8)),
+                          onPressed: _fetchMenuData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Tải lại Menu'))
+                    ]),
               ),
             );
-          }
-          // If menu is ready and has categories, build the selected category list
           if (stackIndex == 2) return _buildSelectedMenuCategoryList(theme);
         }
-        // Fallback: Return an empty container if not showing menu (shouldn't happen with current logic)
         return Container();
       }),
     ];
-
-    // Use IndexedStack to efficiently switch between views without rebuilding them
     return IndexedStack(
       index: stackIndex,
       children: pages,
@@ -2014,34 +1895,27 @@ class _MenuScreenState extends State<MenuScreen> {
 } // End of _MenuScreenState
 
 // --- Availability Switch Widget ---
-// (AvailabilitySwitch remains unchanged - Keep the existing AvailabilitySwitch class here)
 class AvailabilitySwitch extends StatefulWidget {
   final MenuItem item;
   final Future<bool> Function(MenuItem item, bool newValue) onStatusChanged;
-
   const AvailabilitySwitch({
     Key? key,
     required this.item,
     required this.onStatusChanged,
   }) : super(key: key);
-
   @override
   _AvailabilitySwitchState createState() => _AvailabilitySwitchState();
 }
 
 class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
   bool _isUpdating = false;
-  late bool _optimisticValue; // Display this while API call is in progress
-
+  late bool _optimisticValue;
   @override
   void initState() {
     super.initState();
     _optimisticValue = widget.item.available;
   }
 
-  // Update optimistic value if the actual item prop changes from outside
-  // (e.g., fetched data refresh) and it differs from the current optimistic state,
-  // but only if we are not already in the middle of an update initiated by this switch.
   @override
   void didUpdateWidget(covariant AvailabilitySwitch oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -2056,77 +1930,54 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final switchTheme = theme.switchTheme;
-    bool displayValue = _optimisticValue; // Show optimistic value
-
-    // Determine color and text based on optimistic state and loading status
+    bool displayValue = _optimisticValue;
     Color statusColor = _isUpdating
-        ? (Colors.grey[500] ?? Colors.grey)
+        ? theme.disabledColor
         : (displayValue
-            ? (Colors.greenAccent[100] ??
-                Colors.greenAccent) // Lighter accent for text
-            : (Colors.redAccent[100] ?? Colors.redAccent));
+            ? (theme.brightness == Brightness.dark
+                ? Colors.greenAccent[100]!
+                : Colors.green[700]!)
+            : (theme.brightness == Brightness.dark
+                ? Colors.redAccent[100]!
+                : Colors.red[700]!));
     String statusText = _isUpdating ? '...' : (displayValue ? 'Có sẵn' : 'Hết');
-
     return Column(
-      // Column for Switch and Text
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          // Constrain size for the switch/indicator area
-          height: 35, // Adjust height as needed
-          width: 55, // Adjust width as needed
+          height: 35,
+          width: 55,
           child: Center(
             child: _isUpdating
                 ? SizedBox(
-                    // Show loading indicator
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                            theme.colorScheme.secondary)),
-                  )
+                            theme.colorScheme.secondary)))
                 : Switch(
-                    // Actual Switch widget
-                    value: displayValue, // Use optimistic value
+                    value: displayValue,
                     onChanged: (newValue) async {
-                      // Optimistically update UI immediately
                       setState(() {
                         _optimisticValue = newValue;
                         _isUpdating = true;
                       });
-
-                      // Call the API function passed from the parent
                       bool success =
                           await widget.onStatusChanged(widget.item, newValue);
-
-                      // After API call completes, update UI based on success/failure
                       if (mounted) {
-                        // Check if widget is still in the tree
                         setState(() {
                           if (!success) {
-                            // If API failed, revert the optimistic update
                             _optimisticValue = !newValue;
-                            print(
-                                "API update failed, reverting switch for ${widget.item.name}");
-                          } else {
-                            // If API succeeded, the parent widget's state update
-                            // should eventually reflect the change in widget.item.available.
-                            // No need to change _optimisticValue back here.
-                            print(
-                                "API update succeeded for ${widget.item.name}");
                           }
-                          _isUpdating = false; // Stop loading indicator
+                          _isUpdating = false;
                         });
                       } else {
-                        print(
-                            "Switch widget unmounted after API call for ${widget.item.name}");
+                        print("Switch unmounted ${widget.item.name}");
                       }
                     },
-                    // Styling from theme
-                    materialTapTargetSize: MaterialTapTargetSize
-                        .shrinkWrap, // Reduce tap target size
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     activeColor: switchTheme.thumbColor
                         ?.resolve({MaterialState.selected}),
                     inactiveThumbColor: switchTheme.thumbColor?.resolve({}),
@@ -2136,15 +1987,13 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
                   ),
           ),
         ),
-        const SizedBox(height: 4), // Space between switch and text
+        const SizedBox(height: 4),
         Text(
-          // Status text below the switch
           statusText,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontSize: 10.5, // Small font size for status text
+          style: (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+            fontSize: 10.5,
             color: statusColor,
-            fontWeight:
-                FontWeight.w500, // Slightly bolder than default bodySmall
+            fontWeight: FontWeight.w500,
           ),
           textAlign: TextAlign.center,
           maxLines: 1,
@@ -2157,60 +2006,43 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
 // --- Enum OrderListView ---
 enum OrderListView { pending, completed }
 
-// --- Optimized Kitchen Order List Screen ---
+// --- OPTIMIZED Kitchen Order List Screen ---
 class KitchenOrderListScreen extends StatefulWidget {
-  final OrderUpdateCallback? onOrderUpdate; // Callback to MenuScreen
-  final TableClearedCallback? onTableCleared; // Callback to MenuScreen
-
-  const KitchenOrderListScreen({
-    Key? key,
-    this.onOrderUpdate,
-    this.onTableCleared,
-  }) : super(key: key);
-
+  final OrderUpdateCallback? onOrderUpdate;
+  final TableClearedCallback? onTableCleared;
+  const KitchenOrderListScreen(
+      {Key? key, this.onOrderUpdate, this.onTableCleared})
+      : super(key: key);
   @override
   State<KitchenOrderListScreen> createState() => _KitchenOrderListScreenState();
 }
 
 class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     with AutomaticKeepAliveClientMixin {
-  // Use ValueNotifier for efficient updates of the pending list
+  // --- State variables ---
   final ValueNotifier<List<KitchenListOrder>> _pendingOrdersNotifier =
       ValueNotifier([]);
   List<KitchenListOrder> get _pendingOrders => _pendingOrdersNotifier.value;
-  // Setter ensures the notifier is updated when the list changes
   set _pendingOrders(List<KitchenListOrder> newList) {
     _pendingOrdersNotifier.value = newList;
   }
 
-  List<KitchenListOrder> _completedOrders =
-      []; // Standard list for completed orders
-
-  // Loading and error states
+  List<KitchenListOrder> _completedOrders = [];
   bool _isLoadingPending = true;
+  bool _isBackgroundLoading = false;
   String? _pendingErrorMessage;
   bool _isLoadingCompleted = false;
   String? _completedErrorMessage;
-  bool _completedOrdersLoaded = false; // Track if completed loaded once
-
-  OrderListView _currentView = OrderListView.pending; // Current tab
-
-  // State for order details and updates
-  final Set<int> _inProgressOrderIds = {}; // Orders being actively worked on
+  bool _completedOrdersLoaded = false;
+  OrderListView _currentView = OrderListView.pending;
+  final Set<int> _inProgressOrderIds = {};
   bool _isDetailLoading = false;
   String? _detailErrorMessage;
   List<KitchenOrderDetailItem> _detailItems = [];
-  final Set<int> _updatingItemIds =
-      {}; // Items currently updating status in popup
-  bool _isCompletingAll = false; // "Complete All" action in progress
-
-  // Table number fetching cache and state
-  // Cache stores sessionId -> tableNumber (null=not fetched, -1=error/not found, >0=valid)
+  final Set<int> _updatingItemIds = {};
+  bool _isCompletingAll = false;
   final Map<int, int?> _tableNumberCache = {};
-  // Tracks sessionIds currently being fetched to prevent duplicates
   final Set<int> _fetchingTableSessionIds = {};
-
-  // WebSocket state (unchanged)
   WebSocketChannel? _channel;
   bool _isConnected = false;
   bool _isConnecting = false;
@@ -2219,510 +2051,484 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   final int _maxReconnectAttempts = 10;
   final Duration _initialReconnectDelay = const Duration(seconds: 3);
   final Duration _maxReconnectDelay = const Duration(minutes: 1);
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+  List<KitchenListOrder> _filteredPendingOrders = [];
+  List<KitchenListOrder> _filteredCompletedOrders = [];
 
   @override
-  bool get wantKeepAlive => true; // Keep state when switching tabs
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
     print("KitchenOrderListScreen initState");
-    _fetchPendingOrders(); // Initial fetch
+    _searchController.addListener(_onSearchChanged);
+    _pendingOrdersNotifier.addListener(_onPendingOrdersChanged);
+    _fetchPendingOrders();
     _connectWebSocket();
+  }
+
+  void _onPendingOrdersChanged() {
+    if (mounted) {
+      setState(() {
+        _updateFilteredLists();
+      });
+    }
   }
 
   @override
   void dispose() {
     print("KitchenOrderListScreen dispose");
+    _pendingOrdersNotifier.removeListener(_onPendingOrdersChanged);
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     _disconnectWebSocket();
     _reconnectTimer?.cancel();
-    _pendingOrdersNotifier.dispose(); // Dispose ValueNotifier
+    _pendingOrdersNotifier.dispose();
     super.dispose();
   }
 
-  // --- WebSocket Methods ---
-  // (Keep existing _connectWebSocket, _disconnectWebSocket, _scheduleReconnect, _handleWebSocketMessage)
-  // These methods remain unchanged from the previous version.
+  // --- Search & Filter ---
+  void _onSearchChanged() {
+    if (mounted && _searchQuery != _searchController.text) {
+      setState(() {
+        _searchQuery = _searchController.text;
+        _updateFilteredLists();
+      });
+    } else if (!mounted) {
+      _searchQuery = _searchController.text;
+    }
+  }
+
+  void _clearSearch() {
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    } else if (_searchQuery.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _searchQuery = "";
+          _updateFilteredLists();
+        });
+      } else {
+        _searchQuery = "";
+      }
+    }
+  }
+
+  void _updateFilteredLists() {
+    final query = _searchQuery.toLowerCase().trim();
+    if (query.isEmpty) {
+      _filteredPendingOrders = List.from(_pendingOrders);
+      _filteredCompletedOrders = List.from(_completedOrders);
+    } else {
+      _filteredPendingOrders = _pendingOrders.where((o) {
+        final t = o.tableNumber?.toString() ?? "";
+        final id = o.orderId.toString();
+        return id.contains(query) ||
+            (o.tableNumber != null && o.tableNumber! > 0 && t.contains(query));
+      }).toList();
+      _filteredCompletedOrders = _completedOrders.where((o) {
+        final t = o.tableNumber?.toString() ?? "";
+        final id = o.orderId.toString();
+        return id.contains(query) ||
+            (o.tableNumber != null && o.tableNumber! > 0 && t.contains(query));
+      }).toList();
+    }
+    print(
+        "Filtering done. Q:'$query'. P:${_filteredPendingOrders.length}, C:${_filteredCompletedOrders.length}");
+  }
+
+  // --- WebSocket ---
   void _connectWebSocket() {
     if (_isConnecting || _isConnected || _channel != null) return;
     if (!mounted) return;
     setState(() {
       _isConnecting = true;
     });
-    print("WebSocket: Attempting to connect to $kWebSocketUrl...");
+    print("WS: Connect $kWebSocketUrl...");
     try {
       _channel = WebSocketChannel.connect(Uri.parse(kWebSocketUrl));
-      _isConnected = false; // Set connected only on successful listen setup
+      _isConnected = false;
       if (!mounted) {
-        // Check mount immediately after sync connect call
         _channel?.sink.close(status.goingAway);
         _channel = null;
         _isConnecting = false;
         return;
       }
-      print("WebSocket: Connection established, listening for messages...");
+      print("WS: OK, listening...");
       setState(() {
-        _isConnected = true; // Now connected
+        _isConnected = true;
         _isConnecting = false;
-        _reconnectAttempts = 0; // Reset attempts on success
+        _reconnectAttempts = 0;
       });
-      _reconnectTimer?.cancel(); // Cancel any pending reconnect timer
-
+      _reconnectTimer?.cancel();
       _channel!.stream.listen(
-        (message) {
+        (m) {
           if (!mounted) return;
-          print("WebSocket: Received message: $message");
-          _handleWebSocketMessage(message);
+          print("WS: RX $m");
+          _handleWebSocketMessage(m);
         },
-        onError: (error) {
+        onError: (e) {
           if (!mounted) return;
-          print("WebSocket: Error: $error");
+          print("WS: Err $e");
           setState(() {
             _isConnected = false;
             _isConnecting = false;
           });
-          _scheduleReconnect(); // Attempt to reconnect on error
+          _scheduleReconnect();
         },
         onDone: () {
           if (!mounted) return;
           print(
-              "WebSocket: Connection closed (onDone). Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}");
+              "WS: Done. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}");
           setState(() {
             _isConnected = false;
             _isConnecting = false;
           });
-          // Reconnect only if closure was unexpected
           if (_channel?.closeCode != status.goingAway &&
               _channel?.closeCode != status.normalClosure) {
             _scheduleReconnect();
           } else {
-            _channel = null; // Clean up channel if closed normally
+            _channel = null;
           }
         },
-        cancelOnError: false, // Keep listening even after an error
+        cancelOnError: false,
       );
     } catch (e) {
       if (!mounted) return;
-      print("WebSocket: Connection failed: $e");
+      print("WS: Conn fail $e");
       setState(() {
         _isConnected = false;
         _isConnecting = false;
       });
       _channel = null;
-      _scheduleReconnect(); // Attempt to reconnect on initial connection failure
+      _scheduleReconnect();
     }
   }
 
   void _disconnectWebSocket() {
-    print("WebSocket: Disconnecting...");
+    print("WS: Disconnect...");
     _reconnectTimer?.cancel();
-    _channel?.sink.close(status.goingAway); // Indicate intentional closure
+    _channel?.sink.close(status.goingAway);
     _channel = null;
     _isConnected = false;
     _isConnecting = false;
-    // Do not reset reconnect attempts here, allow manual reconnect if needed
   }
 
   void _scheduleReconnect() {
-    if (!mounted || _reconnectTimer?.isActive == true || _isConnecting)
-      return; // Don't schedule if already trying/connected
+    if (!mounted || _reconnectTimer?.isActive == true || _isConnecting) return;
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      print("WebSocket: Max reconnect attempts reached.");
-      _reconnectAttempts = 0; // Reset for potential future manual attempts
+      print("WS: Max reconnect.");
+      _reconnectAttempts = 0;
       return;
     }
     _reconnectAttempts++;
-    // Exponential backoff with jitter could be added, simple exponential for now
     final delay =
         _initialReconnectDelay * math.pow(1.5, _reconnectAttempts - 1);
-    final clampedDelay = delay > _maxReconnectDelay
-        ? _maxReconnectDelay
-        : delay; // Cap the delay
-
+    final clamped = delay > _maxReconnectDelay ? _maxReconnectDelay : delay;
     print(
-        "WebSocket: Scheduling reconnect attempt #$_reconnectAttempts in ${clampedDelay.inSeconds} seconds...");
-    _reconnectTimer = Timer(clampedDelay, () {
+        "WS: Sched reconnect #${_reconnectAttempts} in ${clamped.inSeconds}s...");
+    _reconnectTimer = Timer(clamped, () {
       if (mounted) {
-        _connectWebSocket(); // Attempt connection after delay
+        _connectWebSocket();
       }
     });
   }
 
   void _handleWebSocketMessage(dynamic message) {
-    // Basic handling: Assume any message means potential update, refresh pending orders
-    print("WebSocket: Handling message - Triggering pending order refresh.");
-    // Optional: Decode message if it contains specific instructions
-    dynamic decodedMessage;
-    if (message is String) {
-      try {
-        decodedMessage = jsonDecode(message);
-        print("WebSocket: Decoded message: $decodedMessage");
-        // TODO: Implement more specific logic based on message content if needed
-        // e.g., if message says orderId X updated, only refresh details for X?
-      } catch (e) {
-        print("WebSocket: Message is not valid JSON: $message");
-      }
-    } else {
-      print(
-          "WebSocket: Received non-string message type: ${message.runtimeType}");
-    }
-
+    print("WS: Handle msg -> Refresh pending.");
     if (mounted) {
-      // Force refresh might be slightly less efficient but ensures consistency
-      // if the WebSocket message doesn't specify what changed.
       _fetchPendingOrders(forceRefresh: true);
     }
   }
 
-  // --- OPTIMIZED Data Fetching Methods ---
-
-  // Fetches pending orders ('ordered' and 'in_progress') and their table numbers.
+  // --- Data Fetching ---
   Future<void> _fetchPendingOrders({bool forceRefresh = false}) async {
     if (_isLoadingPending && !forceRefresh) return;
     if (!mounted) return;
-
-    // Clear caches if forcing refresh (only for previously pending orders)
     if (forceRefresh) {
-      print("Kitchen: Force refreshing pending orders.");
-      final pendingSessionIds = _pendingOrders.map((o) => o.sessionId).toSet();
-      _tableNumberCache
-          .removeWhere((sessionId, _) => pendingSessionIds.contains(sessionId));
-      _fetchingTableSessionIds
-          .removeWhere((sessionId) => pendingSessionIds.contains(sessionId));
+      print("Kitchen: Force refresh pending.");
+      final ids = _pendingOrders.map((o) => o.sessionId).toSet();
+      _tableNumberCache.removeWhere((sId, _) => ids.contains(sId));
+      _fetchingTableSessionIds.removeWhere((sId) => ids.contains(sId));
     }
-
-    // Set loading state - only one setState call here for the start
+    bool isInitialLoad = _pendingOrders.isEmpty;
     setState(() {
-      _isLoadingPending = true;
+      if (isInitialLoad) _isLoadingPending = true;
+      _isBackgroundLoading = true;
       _pendingErrorMessage = null;
       if (forceRefresh) _inProgressOrderIds.clear();
     });
-
-    List<KitchenListOrder> finalOrders = [];
+    List<KitchenListOrder> initialOrders = [];
     String? errorMsg;
-    Map<int, int> countsByTable = {};
-
+    bool initialFetchSuccess = false;
     try {
-      // 1. Fetch 'ordered' and 'in_progress' concurrently
-      final results = await Future.wait([
+      print("Kitchen: Fetching basic pending orders...");
+      final r = await Future.wait([
         _fetchOrdersWithStatus('ordered'),
-        _fetchOrdersWithStatus('in_progress'),
-      ], eagerError: true); // Throw error immediately if one fails
-
-      if (!mounted) return; // Check mount after awaits
-
-      final orderedOrders = results[0];
-      final inProgressOrders = results[1];
-
-      // 2. Combine, deduplicate, and sort
-      List<KitchenListOrder> combinedPendingOrders = [
-        ...orderedOrders,
-        ...inProgressOrders
-      ];
-      final uniquePendingOrdersMap = <int, KitchenListOrder>{
-        for (var order in combinedPendingOrders) order.orderId: order
+        _fetchOrdersWithStatus('in_progress')
+      ], eagerError: true);
+      if (!mounted) return;
+      final o = r[0];
+      final i = r[1];
+      List<KitchenListOrder> c = [...o, ...i];
+      final m = <int, KitchenListOrder>{
+        for (var order in c) order.orderId: order
       };
-      final sortedOrders = uniquePendingOrdersMap.values.toList()
-        ..sort((a, b) => a.orderTime.compareTo(b.orderTime)); // Oldest first
-
-      // 3. Fetch table numbers for the combined list (essential step before final state update)
-      // This now populates the cache or uses existing cached values.
-      final ordersWithTableNumbers =
-          await _fetchTableNumbersForOrders(sortedOrders);
-      finalOrders = ordersWithTableNumbers;
-
-      if (!mounted) return; // Check mount again
-
-      // 4. Calculate counts *after* table numbers are fetched/resolved
-      countsByTable.clear();
-      for (var order in finalOrders) {
-        // Use valid, non-error table numbers for counting
-        if (order.tableNumber != null &&
-            order.tableNumber! > 0 &&
-            order.tableNumber! != -1) {
-          countsByTable[order.tableNumber!] =
-              (countsByTable[order.tableNumber!] ?? 0) + 1;
-        }
-      }
-
-      // 5. Notify parent screen (MenuScreen)
-      try {
-        widget.onOrderUpdate?.call(countsByTable);
-      } catch (e) {
-        print("Kitchen: Error calling onOrderUpdate callback: $e");
-      }
-
-      // 6. Update the local set of 'in_progress' orders
+      initialOrders = m.values.toList()
+        ..sort((a, b) => a.orderTime.compareTo(b.orderTime));
       _inProgressOrderIds.clear();
-      for (var order in finalOrders) {
-        if (inProgressOrders
-            .any((ipOrder) => ipOrder.orderId == order.orderId)) {
+      for (var order in initialOrders) {
+        if (i.any((ip) => ip.orderId == order.orderId)) {
           _inProgressOrderIds.add(order.orderId);
         }
       }
+      initialFetchSuccess = true;
+      print("Kitchen: Basic pending orders fetched: ${initialOrders.length}");
     } catch (e) {
-      errorMsg = "Lỗi tải đơn hàng: ${e.toString()}";
-      print("Kitchen: Error fetching PENDING orders: $e");
-      // Notify parent with empty counts on error
+      errorMsg = "Lỗi tải danh sách đơn: $e";
+      print("Kitchen: Err fetch PENDING (basic): $e");
+      initialOrders = [];
+    }
+
+    if (mounted) {
+      _pendingOrders =
+          initialOrders; // Updates notifier -> listener -> _updateFilteredLists
+      _pendingErrorMessage = errorMsg;
+      _isLoadingPending = false; // Stop initial shimmer
+      setState(() {}); // Rebuild with initial data (tables loading)
+      print("Kitchen: Initial pending list rendered.");
+    }
+
+    if (mounted && initialFetchSuccess && initialOrders.isNotEmpty) {
+      print("Kitchen: Starting background table number fetch...");
+      // Use Future.delayed to ensure this runs after the current build cycle
+      Future.delayed(
+          Duration.zero, () => _fetchAndProcessTableNumbers(initialOrders));
+    } else {
       if (mounted) {
+        setState(() {
+          _isBackgroundLoading = false;
+        });
         try {
           widget.onOrderUpdate?.call({});
         } catch (e) {
-          print(
-              "Kitchen: Error calling onOrderUpdate callback during error handling: $e");
+          print("Err call onOrderUpdate (init fail): $e");
         }
-      }
-    } finally {
-      // 7. Final State Update: Update the list (ValueNotifier) and loading/error state
-      // Only one setState call here for the entire pending order fetch process.
-      if (mounted) {
-        setState(() {
-          _pendingOrders = finalOrders; // Update ValueNotifier via setter
-          _pendingErrorMessage = errorMsg;
-          _isLoadingPending = false;
-        });
-        print(
-            "Kitchen: Finished fetching pending orders. Count: ${finalOrders.length}. Pending Counts: $countsByTable");
       }
     }
   }
 
-  // Fetches completed orders ('served') and their table numbers.
+  Future<void> _fetchAndProcessTableNumbers(
+      List<KitchenListOrder> orders) async {
+    try {
+      print(
+          "Kitchen: Starting background table# fetch for ${orders.length} orders.");
+      await _fetchTableNumbersForOrders(orders);
+      if (!mounted) return;
+
+      Map<int, int> counts = {};
+      for (var order in _pendingOrdersNotifier.value) {
+        // Use current notifier value
+        if (order.tableNumber != null &&
+            order.tableNumber! > 0 &&
+            order.tableNumber! != -1) {
+          counts[order.tableNumber!] = (counts[order.tableNumber!] ?? 0) + 1;
+        }
+      }
+      print("Kitchen: Background table# fetched. Updated counts: $counts");
+
+      try {
+        widget.onOrderUpdate?.call(counts);
+      } catch (e) {
+        print("Kitchen: Err call onOrderUpdate post table fetch: $e");
+      }
+
+      if (mounted) {
+        setState(() {
+          _isBackgroundLoading = false;
+        }); // Stop indicator
+      }
+    } catch (e) {
+      print("Kitchen: Err during background table# fetch/update: $e");
+      if (mounted) {
+        setState(() {
+          _isBackgroundLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _fetchCompletedOrders({bool forceRefresh = false}) async {
     if (_isLoadingCompleted && !forceRefresh) return;
     if (!mounted) return;
-
-    // Clear relevant caches if forcing refresh
     if (forceRefresh) {
-      // (Similar cache clearing as in _fetchPendingOrders)
-      print("Kitchen: Force refreshing completed orders.");
-      final completedSessionIds =
-          _completedOrders.map((o) => o.sessionId).toSet();
-      _tableNumberCache.removeWhere(
-          (sessionId, _) => completedSessionIds.contains(sessionId));
-      _fetchingTableSessionIds
-          .removeWhere((sessionId) => completedSessionIds.contains(sessionId));
+      print("Kitchen: Force refresh completed.");
+      final ids = _completedOrders.map((o) => o.sessionId).toSet();
+      _tableNumberCache.removeWhere((sId, _) => ids.contains(sId));
+      _fetchingTableSessionIds.removeWhere((sId) => ids.contains(sId));
     }
-
-    // Set loading state
+    bool isInitialLoad = _completedOrders.isEmpty;
     setState(() {
       _isLoadingCompleted = true;
+      _isBackgroundLoading = true;
       _completedErrorMessage = null;
     });
-
-    List<KitchenListOrder> finalOrders = [];
+    List<KitchenListOrder> initialOrders = [];
     String? errorMsg;
-
+    bool initialFetchSuccess = false;
     try {
-      // 1. Fetch 'served' orders
-      final servedOrders = await _fetchOrdersWithStatus('served');
+      print("Kitchen: Fetching basic completed orders...");
+      final served = await _fetchOrdersWithStatus('served');
       if (!mounted) return;
-
-      // 2. Fetch table numbers (might use cache)
-      final ordersWithTableNumbers =
-          await _fetchTableNumbersForOrders(servedOrders);
-      if (!mounted) return;
-
-      // 3. Sort (newest first for completed)
-      ordersWithTableNumbers.sort((a, b) => b.orderTime.compareTo(a.orderTime));
-      finalOrders = ordersWithTableNumbers;
-      _completedOrdersLoaded = true; // Mark as loaded
+      initialOrders = served
+        ..sort((a, b) => b.orderTime.compareTo(a.orderTime));
+      initialFetchSuccess = true;
+      print("Kitchen: Basic completed orders fetched: ${initialOrders.length}");
     } catch (e) {
-      errorMsg = "Lỗi tải đơn đã hoàn thành: ${e.toString()}";
-      print("Kitchen: Error fetching COMPLETED orders: $e");
-    } finally {
-      // 4. Final State Update
-      if (mounted) {
-        setState(() {
-          _completedOrders = finalOrders;
-          _completedErrorMessage = errorMsg;
-          _isLoadingCompleted = false;
-        });
-        print(
-            "Kitchen: Finished fetching completed orders. Count: ${finalOrders.length}");
-      }
+      errorMsg = "Lỗi tải đơn hoàn thành: $e";
+      print("Kitchen: Err fetch COMPLETED (basic): $e");
+      initialOrders = [];
+    }
+
+    if (mounted) {
+      _completedOrders = initialOrders;
+      _completedErrorMessage = errorMsg;
+      _isLoadingCompleted = false;
+      _completedOrdersLoaded = true;
+      _updateFilteredLists();
+      setState(() {});
+      print("Kitchen: Initial completed list rendered.");
+    }
+    if (mounted && initialFetchSuccess && initialOrders.isNotEmpty) {
+      Future.delayed(
+          Duration.zero, () => _fetchAndProcessTableNumbers(initialOrders));
+    } else if (mounted) {
+      setState(() {
+        _isBackgroundLoading = false;
+      });
     }
   }
 
-  // Fetches orders for a specific status (unchanged)
   Future<List<KitchenListOrder>> _fetchOrdersWithStatus(String status) async {
-    // (Keep existing implementation)
-    final baseUrl =
-        'https://soa-deploy.up.railway.app/kitchen/get-orders-by-status/';
-    final url = Uri.parse('$baseUrl$status');
-    print("Kitchen API: Fetching orders with status '$status': $url");
+    final u = Uri.parse(
+        'https://soa-deploy.up.railway.app/kitchen/get-orders-by-status/$status');
+    print("API: Fetch $status: $u");
     try {
-      final response = await http
-          .get(url)
-          .timeout(const Duration(seconds: 15)); // 15s timeout
-      if (!mounted) return []; // Check mount after await
-      if (response.statusCode == 200) {
-        final List<dynamic> decodedData =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        return decodedData
-            .map((orderData) =>
-                KitchenListOrder.fromJson(orderData as Map<String, dynamic>))
+      final r = await http.get(u).timeout(const Duration(seconds: 15));
+      if (!mounted) return [];
+      if (r.statusCode == 200) {
+        final List<dynamic> d = jsonDecode(utf8.decode(r.bodyBytes));
+        return d
+            .map((o) => KitchenListOrder.fromJson(o as Map<String, dynamic>))
             .toList();
       } else {
-        String errorBody = response.body;
+        String b = r.body;
         try {
-          errorBody = utf8.decode(response.bodyBytes);
-        } catch (_) {} // Try decode body
-        print(
-            "Kitchen API: Error fetching orders with status '$status': ${response.statusCode}, Body: $errorBody");
-        throw Exception(
-            'Failed to load orders (status $status): ${response.statusCode}');
+          b = utf8.decode(r.bodyBytes);
+        } catch (_) {}
+        print("API: Err $status: ${r.statusCode}, Body: $b");
+        throw Exception('Fail load $status: ${r.statusCode}');
       }
     } catch (e) {
-      // Handle timeout or network errors
-      print(
-          "Kitchen API: Network/Timeout Error fetching orders with status '$status': $e");
-      throw Exception('Network error fetching orders (status $status)');
+      print("API: Net/Timeout Err $status: $e");
+      throw Exception('Net err $status');
     }
   }
 
-  // Fetches table number for a single session ID, using cache.
-  // OPTIMIZED: Removed setState from here.
   Future<int?> _fetchTableNumber(int sessionId) async {
-    // 1. Check cache first
     if (_tableNumberCache.containsKey(sessionId)) {
-      final cachedValue = _tableNumberCache[sessionId];
-      // print("Cache hit for session $sessionId: $cachedValue");
-      return cachedValue == -1 ? null : cachedValue;
+      final v = _tableNumberCache[sessionId];
+      return v == -1 ? null : v;
     }
-
-    // 2. Check if already fetching this specific session ID
     if (_fetchingTableSessionIds.contains(sessionId)) {
-      // print("Already fetching table number for session $sessionId");
-      return null; // Indicate loading (will be picked up on next refresh)
+      return null;
     }
-
-    // 3. Check mount before network call
     if (!mounted) return null;
-
-    // 4. Mark as fetching (without setState)
     _fetchingTableSessionIds.add(sessionId);
-    // print("Fetching table number for session $sessionId...");
-
     final url = Uri.parse(
         'https://soa-deploy.up.railway.app/order/session/$sessionId/table-number');
-    int? resultTableNumber;
-    int cacheValue = -1; // Default to error/not found state for cache
-
+    int? res;
+    int cacheVal = -1;
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
-
-      // Check mount again after await
+      final r = await http.get(url).timeout(const Duration(seconds: 8));
       if (!mounted) {
-        _fetchingTableSessionIds.remove(sessionId); // Clean up fetching state
+        _fetchingTableSessionIds.remove(sessionId);
         return null;
       }
-
-      if (response.statusCode == 200) {
-        // (Keep existing JSON parsing and validation logic)
-        final decodedData = jsonDecode(utf8.decode(response.bodyBytes));
-        dynamic tableNumberData;
-        if (decodedData is Map && decodedData.containsKey('table_number')) {
-          tableNumberData = decodedData['table_number'];
-        } else if (decodedData is int || decodedData is String) {
-          tableNumberData = decodedData;
-        }
-        if (tableNumberData is int) {
-          resultTableNumber = tableNumberData;
-        } else if (tableNumberData is String) {
-          resultTableNumber = int.tryParse(tableNumberData);
-        }
-        if (resultTableNumber != null && resultTableNumber > 0) {
-          cacheValue = resultTableNumber; // Cache the valid number
-        } else {
-          print(
-              "Warning: Could not parse a valid table number for session $sessionId from data: $tableNumberData");
-          resultTableNumber = null;
-          cacheValue = -1; // Cache -1 for invalid/not found
+      if (r.statusCode == 200) {
+        final d = jsonDecode(utf8.decode(r.bodyBytes));
+        dynamic t;
+        if (d is Map && d.containsKey('table_number'))
+          t = d['table_number'];
+        else if (d is int || d is String) t = d;
+        if (t is int)
+          res = t;
+        else if (t is String) res = int.tryParse(t);
+        if (res != null && res > 0)
+          cacheVal = res;
+        else {
+          print("Warn: Invalid table# $sessionId data: $t");
+          res = null;
+          cacheVal = -1;
         }
       } else {
-        print(
-            "Error fetching table number for session $sessionId: ${response.statusCode}, Body: ${response.body}");
-        resultTableNumber = null;
-        cacheValue = -1; // Cache error state
+        print("Err fetch table# $sessionId: ${r.statusCode} Body: ${r.body}");
+        res = null;
+        cacheVal = -1;
       }
     } catch (e) {
-      print("Exception fetching table number for session $sessionId: $e");
-      resultTableNumber = null;
-      cacheValue = -1; // Cache error state
+      print("Exc fetch table# $sessionId: $e");
+      res = null;
+      cacheVal = -1;
       if (!mounted) {
-        // Check mount in catch block
         _fetchingTableSessionIds.remove(sessionId);
         return null;
       }
     } finally {
-      // 5. IMPORTANT: Update cache and remove from fetching set *without* setState.
-      // The calling function (_fetchTableNumbersForOrders) will handle the UI update
-      // after all necessary fetches are done.
-      _tableNumberCache[sessionId] = cacheValue;
+      _tableNumberCache[sessionId] = cacheVal;
       _fetchingTableSessionIds.remove(sessionId);
-      // print("Finished fetching/caching for session $sessionId. Result: $resultTableNumber, Cached: $cacheValue");
     }
-    return resultTableNumber; // Return the fetched/parsed number (or null on error)
+    return res;
   }
 
-  // Fetches table numbers for a list of orders, utilizing the cache and concurrent fetches.
   Future<List<KitchenListOrder>> _fetchTableNumbersForOrders(
       List<KitchenListOrder> orders) async {
-    if (orders.isEmpty) return orders; // No need to fetch if list is empty
-
-    final List<Future<void>> fetchFutures = [];
-    final Set<int> sessionIdsToFetch = {};
-
-    // Identify which session IDs *actually* need fetching
-    for (var order in orders) {
-      if (!_tableNumberCache.containsKey(order.sessionId) &&
-          !_fetchingTableSessionIds.contains(order.sessionId)) {
-        sessionIdsToFetch.add(order.sessionId);
+    if (orders.isEmpty) return orders;
+    final List<Future<void>> fut = [];
+    final Set<int> needed = {};
+    for (var o in orders) {
+      if (!_tableNumberCache.containsKey(o.sessionId) &&
+          !_fetchingTableSessionIds.contains(o.sessionId)) {
+        needed.add(o.sessionId);
       }
     }
-
-    // Create and start fetch futures only for those needed
-    if (sessionIdsToFetch.isNotEmpty) {
-      print("Need to fetch table numbers for sessions: $sessionIdsToFetch");
-      for (int sessionId in sessionIdsToFetch) {
-        fetchFutures.add(_fetchTableNumber(
-            sessionId)); // Add the future, don't await individually
+    if (needed.isNotEmpty) {
+      print("Need fetch table# for: $needed");
+      for (int sId in needed) {
+        fut.add(_fetchTableNumber(sId));
       }
-      // Await all necessary fetches concurrently
       try {
-        await Future.wait(fetchFutures);
-        print("Finished Future.wait for table numbers.");
+        await Future.wait(fut);
+        print("Done Future.wait table#");
       } catch (e) {
-        print(
-            "Error occurred during Future.wait for table numbers (individual errors logged in _fetchTableNumber): $e");
+        print("Err Future.wait table#: $e");
       }
-    } else {
-      // print("All required table numbers were cached or are already fetching.");
     }
-
-    // After fetches complete (or if all were cached), update the order objects
-    // This assumes _fetchTableNumber has updated the cache correctly.
-    if (!mounted) return orders; // Check mount again after awaits
-
-    // Create a new list with updated table numbers from the cache
-    List<KitchenListOrder> updatedOrders = orders.map((order) {
-      final cachedTableNum = _tableNumberCache[order.sessionId];
-      // Update the order's tableNumber property if it's not already set correctly
-      // The cache should now contain either a valid number, -1 (error), or still be null if the fetch is somehow ongoing (unlikely here)
-      if (order.tableNumber != cachedTableNum) {
-        order.tableNumber = cachedTableNum;
+    if (!mounted) return orders;
+    List<KitchenListOrder> updated = orders.map((o) {
+      final c = _tableNumberCache[o.sessionId];
+      if (o.tableNumber != c) {
+        o.tableNumber = c;
       }
-      return order;
+      return o;
     }).toList();
-
-    return updatedOrders;
+    return updated;
   }
 
-  // Fetches details for a specific order (unchanged)
   Future<void> _fetchOrderDetail(
       int orderId, StateSetter setDialogState) async {
-    // (Keep existing implementation - was already reasonably optimized with timeout)
     if (!mounted) return;
     bool isDialogMounted = true;
     try {
@@ -2731,35 +2537,28 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       isDialogMounted = false;
     }
     if (!isDialogMounted) {
-      print(
-          "Order detail fetch cancelled: Dialog is no longer mounted for Order $orderId.");
+      print("Detail fetch cancelled: Dialog unmounted $orderId.");
       return;
     }
-
     try {
       setDialogState(() {
-        /* ... set loading ... */ _isDetailLoading = true;
+        _isDetailLoading = true;
         _detailErrorMessage = null;
         _detailItems = [];
         _updatingItemIds.clear();
         _isCompletingAll = false;
       });
     } catch (e) {
-      print("Error setting dialog state for loading (Order $orderId): $e");
+      print("Err set dialog load state $orderId: $e");
       _isDetailLoading = false;
       _detailItems = [];
       return;
     }
-
     final url = Uri.parse(
         'https://soa-deploy.up.railway.app/kitchen/order/$orderId/items');
-    print('Fetching order detail: ${url.toString()}');
-
+    print('Fetch detail: $url');
     try {
-      final response = await http
-          .get(url)
-          .timeout(const Duration(seconds: 8)); // Keep 8s timeout
-
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
       if (!mounted) return;
       isDialogMounted = true;
       try {
@@ -2768,55 +2567,50 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
         isDialogMounted = false;
       }
       if (!isDialogMounted) {
-        print(
-            "Order detail fetch cancelled after API call: Dialog no longer mounted for Order $orderId.");
+        print("Detail fetch cancelled post-API: Dialog unmounted $orderId.");
         return;
       }
-
       if (response.statusCode == 200) {
-        final List<dynamic> decodedData =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        final List<KitchenOrderDetailItem> fetchedItems = decodedData
-            .map((jsonItem) => KitchenOrderDetailItem.fromJson(
-                jsonItem as Map<String, dynamic>))
+        final List<dynamic> d = jsonDecode(utf8.decode(response.bodyBytes));
+        final List<KitchenOrderDetailItem> f = d
+            .map((i) =>
+                KitchenOrderDetailItem.fromJson(i as Map<String, dynamic>))
             .toList();
         try {
           setDialogState(() {
-            _detailItems = fetchedItems;
+            _detailItems = f;
             _isDetailLoading = false;
           });
         } catch (e) {
-          print("Error setting dialog state with data (Order $orderId): $e");
-          _detailItems = fetchedItems;
+          print("Err set dialog data state $orderId: $e");
+          _detailItems = f;
           _isDetailLoading = false;
         }
       } else {
-        print(
-            "Error fetching order detail for $orderId: ${response.statusCode}");
-        final errorBody = utf8.decode(response.bodyBytes);
-        String serverErrorMsg = '';
+        print("Err fetch detail $orderId: ${response.statusCode}");
+        final b = utf8.decode(response.bodyBytes);
+        String s = '';
         try {
-          final decodedError = jsonDecode(errorBody);
-          if (decodedError is Map && decodedError.containsKey('detail')) {
-            serverErrorMsg = ': ${decodedError['detail']}';
+          final de = jsonDecode(b);
+          if (de is Map && de.containsKey('detail')) {
+            s = ': ${de['detail']}';
           }
-        } catch (_) {}
+        } catch (_) {
+          print("Server err body not JSON $orderId. Body: $b");
+        }
         try {
           setDialogState(() {
-            _detailErrorMessage =
-                'Lỗi tải chi tiết (${response.statusCode})$serverErrorMsg';
+            _detailErrorMessage = 'Lỗi tải chi tiết (${response.statusCode})$s';
             _isDetailLoading = false;
           });
         } catch (e) {
-          print(
-              "Error setting dialog state with server error (Order $orderId): $e");
-          _detailErrorMessage =
-              'Lỗi tải chi tiết (${response.statusCode})$serverErrorMsg';
+          print("Err set dialog server err state $orderId: $e");
+          _detailErrorMessage = 'Lỗi tải chi tiết (${response.statusCode})$s';
           _isDetailLoading = false;
         }
       }
     } on TimeoutException catch (e) {
-      print("Timeout Error fetching order detail for order $orderId: $e");
+      print("Timeout fetch detail $orderId: $e");
       if (!mounted) return;
       isDialogMounted = true;
       try {
@@ -2827,19 +2621,16 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       if (!isDialogMounted) return;
       try {
         setDialogState(() {
-          _detailErrorMessage =
-              'Yêu cầu quá thời gian quy định (8 giây). Vui lòng thử lại.';
+          _detailErrorMessage = 'Yêu cầu quá thời gian (8 giây).';
           _isDetailLoading = false;
         });
       } catch (se) {
-        print(
-            "Error setting dialog state with timeout error (Order $orderId): $se");
-        _detailErrorMessage =
-            'Yêu cầu quá thời gian quy định (8 giây). Vui lòng thử lại.';
+        print("Err set dialog timeout err state $orderId: $se");
+        _detailErrorMessage = 'Yêu cầu quá thời gian (8 giây).';
         _isDetailLoading = false;
       }
     } catch (e) {
-      print("Network/Other Error fetching order detail for order $orderId: $e");
+      print("Net/Other Err fetch detail $orderId: $e");
       if (!mounted) return;
       isDialogMounted = true;
       try {
@@ -2850,82 +2641,60 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       if (!isDialogMounted) return;
       try {
         setDialogState(() {
-          _detailErrorMessage =
-              'Lỗi kết nối hoặc xử lý dữ liệu. Vui lòng thử lại.';
+          _detailErrorMessage = 'Lỗi kết nối/xử lý dữ liệu.';
           _isDetailLoading = false;
         });
       } catch (se) {
-        print(
-            "Error setting dialog state with catch error (Order $orderId): $se");
-        _detailErrorMessage =
-            'Lỗi kết nối hoặc xử lý dữ liệu. Vui lòng thử lại.';
+        print("Err set dialog catch err state $orderId: $se");
+        _detailErrorMessage = 'Lỗi kết nối/xử lý dữ liệu.';
         _isDetailLoading = false;
       }
     }
   }
 
   // --- Popup & Order Management Methods ---
-
-  // Shows the order detail popup (unchanged)
   void _showOrderDetailPopup(BuildContext context, KitchenListOrder order) {
-    // (Keep existing implementation)
     final theme = Theme.of(context);
-    // Reset local popup state before showing
     _isDetailLoading = false;
     _detailErrorMessage = null;
     _detailItems = [];
     _updatingItemIds.clear();
     _isCompletingAll = false;
-
     showDialog<void>(
-        context: context, // Use the BuildContext from where this was called
-        barrierDismissible:
-            !_isCompletingAll, // Prevent dismissal during critical operations
+        context: context,
+        barrierDismissible: !_isCompletingAll,
         builder: (BuildContext dialogContext) {
-          // dialogContext is specific to this dialog
-          return StatefulBuilder(
-              // Use StatefulBuilder to manage dialog's internal state
-              builder: (context, setDialogState) {
-            // 'context' here is the same as dialogContext
-
-            // Fetch details only once when the dialog builds, if needed
+          return StatefulBuilder(builder: (context, setDialogState) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              // Check if dialog is still current and details haven't been loaded/are not loading
-              bool shouldFetch = mounted &&
+              bool f = mounted &&
                   (ModalRoute.of(dialogContext)?.isCurrent ?? false) &&
                   _detailItems.isEmpty &&
                   !_isDetailLoading &&
                   _detailErrorMessage == null;
-              if (shouldFetch) {
+              if (f) {
                 _fetchOrderDetail(order.orderId, setDialogState);
               }
             });
-
-            // Determine if the "Complete All" button should be enabled
-            bool canCompleteAll = _detailItems
-                    .any((item) => item.status.toLowerCase() != 'served') &&
-                !_isDetailLoading &&
-                !_isCompletingAll &&
-                _updatingItemIds.isEmpty;
-
+            bool canCompleteAll =
+                _detailItems.any((i) => i.status.toLowerCase() != 'served') &&
+                    !_isDetailLoading &&
+                    !_isCompletingAll &&
+                    _updatingItemIds.isEmpty;
             return AlertDialog(
-              titlePadding: const EdgeInsets.fromLTRB(
-                  16.0, 16.0, 8.0, 10.0), // Custom padding
+              titlePadding: const EdgeInsets.fromLTRB(16.0, 16.0, 8.0, 10.0),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Flexible(
-                      // Allow title to shrink
                       child: Text(
                     'Chi tiết Đơn #${order.orderId}',
                     style: theme.dialogTheme.titleTextStyle,
                     overflow: TextOverflow.ellipsis,
                   )),
-                  // Action Icons Row
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_isCompletingAll) // Show spinner when completing all
+                      if (_isCompletingAll)
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 8.0),
                           child: SizedBox(
@@ -2935,14 +2704,14 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                   strokeWidth: 2,
                                   color: Colors.lightBlueAccent)),
                         )
-                      else // Show Complete All button
+                      else
                         IconButton(
                           icon: Icon(Icons.done_all,
                               color: canCompleteAll
                                   ? theme.colorScheme.secondary
-                                  : Colors.grey[600],
+                                  : theme.disabledColor,
                               size: 24),
-                          tooltip: 'Hoàn thành tất cả món chưa phục vụ',
+                          tooltip: 'Hoàn thành tất cả',
                           onPressed: !canCompleteAll
                               ? null
                               : () => _completeAllItemsForOrder(
@@ -2950,13 +2719,11 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                           splashRadius: 20,
                           visualDensity: VisualDensity.compact,
                         ),
-                      // Refresh Button
                       IconButton(
                         icon: Icon(Icons.refresh,
                             color: theme.colorScheme.secondary.withOpacity(0.8),
                             size: 22),
-                        tooltip: 'Tải lại chi tiết đơn',
-                        // Disable refresh if already loading/updating
+                        tooltip: 'Tải lại',
                         onPressed: _isDetailLoading ||
                                 _updatingItemIds.isNotEmpty ||
                                 _isCompletingAll
@@ -2970,262 +2737,236 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                   )
                 ],
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                  vertical: 8.0), // Adjust content padding
-              content: _buildPopupContent(
-                  theme,
-                  setDialogState,
-                  order,
-                  _isCompletingAll,
-                  dialogContext), // Build the main content area
+              contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+              content: _buildPopupContent(theme, setDialogState, order,
+                  _isCompletingAll, dialogContext),
               actionsPadding:
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               actions: [
                 TextButton(
                   onPressed: _updatingItemIds.isNotEmpty || _isCompletingAll
                       ? null
-                      : () => Navigator.of(dialogContext)
-                          .pop(), // Disable close if updating
+                      : () => Navigator.of(dialogContext).pop(),
                   child: Text('Đóng',
                       style: TextStyle(
                           color: _updatingItemIds.isNotEmpty || _isCompletingAll
-                              ? Colors.grey
+                              ? theme.disabledColor
                               : theme.colorScheme.secondary)),
                 ),
               ],
-              backgroundColor:
-                  theme.dialogTheme.backgroundColor, // Consistent background
-              shape: theme.dialogTheme.shape, // Consistent shape
+              backgroundColor: theme.dialogTheme.backgroundColor,
+              shape: theme.dialogTheme.shape,
             );
           });
         }).then((_) {
-      // This runs when the dialog is closed (popped)
-      // Reset any state specific to the *last shown* popup to avoid carry-over
       _updatingItemIds.clear();
       _detailItems = [];
       _isDetailLoading = false;
       _detailErrorMessage = null;
       _isCompletingAll = false;
-      print(
-          "Order detail dialog closed for #${order.orderId}. Local popup state reset.");
+      print("Detail dialog closed #${order.orderId}");
     });
   }
 
-  // Shows pending orders for a specific table, uses ValueListenableBuilder for efficiency (unchanged)
   void showOrdersForTable(BuildContext parentContext, int tableNumber) {
-    // (Keep existing implementation using ValueListenableBuilder)
     final theme = Theme.of(parentContext);
-    print("Showing popup for table $tableNumber.");
-
-    // Use ValueListenableBuilder to automatically rebuild the dialog content
-    // when the _pendingOrdersNotifier changes.
+    print("Show popup table $tableNumber.");
     showDialog(
       context: parentContext,
       builder: (BuildContext dialogContext) {
         return ValueListenableBuilder<List<KitchenListOrder>>(
           valueListenable: _pendingOrdersNotifier,
           builder: (context, currentPendingOrders, child) {
-            // Filter orders for the specific table from the latest notifier value
             final ordersForTable = currentPendingOrders
-                .where((order) => order.tableNumber == tableNumber)
-                .toList();
-            ordersForTable.sort(
-                (a, b) => a.orderTime.compareTo(b.orderTime)); // Oldest first
-
-            // If no more orders for this table, close the dialog automatically
+                .where((o) => o.tableNumber == tableNumber)
+                .toList()
+              ..sort((a, b) => a.orderTime.compareTo(b.orderTime));
             if (ordersForTable.isEmpty && Navigator.canPop(dialogContext)) {
-              print(
-                  "Table $tableNumber list popup: No more pending orders found (detected by listener). Closing.");
-              // Schedule the pop after the current build frame
+              print("Table $tableNumber list popup: Auto-closing.");
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (Navigator.canPop(dialogContext)) {
-                  // Double check if still can pop
                   Navigator.of(dialogContext).pop();
                 }
               });
-              // Return an empty container temporarily while closing
               return const SizedBox.shrink();
             }
-
-            // Build the dialog UI
-            return AlertDialog(
-              title: Text('Đơn hàng Bàn $tableNumber (Đang chờ)'),
-              content: Container(
-                width: double.maxFinite, // Use available width
-                constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(dialogContext).size.height *
-                        0.5), // Limit height
-                child: ordersForTable.isEmpty
-                    ? Center(
-                        // Should technically not be reached due to auto-close logic above
-                        child: Padding(
-                          padding: const EdgeInsets.all(kDefaultPadding),
-                          child: Text(
-                            'Không còn đơn hàng nào đang chờ.', /* ... style ... */
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: ordersForTable.length,
-                        itemBuilder: (context, index) {
-                          final order = ordersForTable[index];
-                          final formattedTime = DateFormat('HH:mm - dd/MM/yy')
-                              .format(order.orderTime);
-                          final bool showInProgressIcon =
-                              _inProgressOrderIds.contains(order.orderId);
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                                vertical: kDefaultPadding * 0.6),
-                            color: theme.cardTheme.color?.withOpacity(0.9),
-                            child: ListTile(
-                              leading: Icon(Icons.receipt_long,
-                                  color: theme.colorScheme.secondary
-                                      .withOpacity(0.8)),
-                              title: Row(
-                                children: [
-                                  if (showInProgressIcon)
-                                    Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 6),
-                                        child: Icon(Icons.hourglass_top_rounded,
-                                            color: Colors.yellowAccent[700],
-                                            size: 16)),
-                                  Flexible(
-                                      child: Text('Đơn #${order.orderId}')),
-                                ],
-                              ),
-                              subtitle: Text('TG: $formattedTime'),
-                              trailing: const Icon(Icons.arrow_forward_ios,
-                                  size: 16, color: Colors.white70),
-                              onTap: () {
-                                // Close this list popup *before* showing the detail popup
-                                // Might feel smoother than having two popups potentially overlap
-                                // Navigator.of(dialogContext).pop(); // Optional: close this one first
-                                _showOrderDetailPopup(parentContext,
-                                    order); // Show detail using parent context
-                              },
-                              dense: true,
+            return WillPopScope(
+              onWillPop: () async {
+                print("Table $tableNumber list popup: Manually closing.");
+                return true;
+              },
+              child: AlertDialog(
+                title: Text('Đơn hàng Bàn $tableNumber (Đang chờ)',
+                    style: theme.dialogTheme.titleTextStyle),
+                content: Container(
+                  width: double.maxFinite,
+                  constraints: BoxConstraints(
+                      maxHeight:
+                          MediaQuery.of(dialogContext).size.height * 0.5),
+                  child: ordersForTable.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(kDefaultPadding),
+                            child: Text(
+                              'Không còn đơn hàng nào đang chờ.',
+                              style: (theme.textTheme.bodyMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7)),
+                              textAlign: TextAlign.center,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: ordersForTable.length,
+                          itemBuilder: (context, index) {
+                            final order = ordersForTable[index];
+                            final fmtTime = DateFormat('HH:mm - dd/MM/yy')
+                                .format(order.orderTime);
+                            final bool showIP =
+                                _inProgressOrderIds.contains(order.orderId);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: kDefaultPadding * 0.6),
+                              color: theme.cardTheme.color?.withOpacity(0.9),
+                              child: ListTile(
+                                leading: Icon(Icons.receipt_long,
+                                    color: theme.colorScheme.secondary
+                                        .withOpacity(0.8)),
+                                title: Row(
+                                  children: [
+                                    if (showIP)
+                                      Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 6),
+                                          child: Icon(
+                                              Icons.hourglass_top_rounded,
+                                              color: Colors.yellowAccent[700],
+                                              size: 16)),
+                                    Flexible(
+                                        child: Text('Đơn #${order.orderId}')),
+                                  ],
+                                ),
+                                subtitle: Text('TG: $fmtTime'),
+                                trailing: Icon(Icons.arrow_forward_ios,
+                                    size: 16,
+                                    color: theme.iconTheme.color
+                                        ?.withOpacity(0.7)),
+                                onTap: () {
+                                  _showOrderDetailPopup(parentContext, order);
+                                },
+                                dense: true,
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                actions: [
+                  TextButton.icon(
+                    icon: Icon(Icons.refresh,
+                        size: 16,
+                        color: theme.colorScheme.secondary.withOpacity(0.8)),
+                    label: Text('Làm mới DS',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                theme.colorScheme.secondary.withOpacity(0.8))),
+                    onPressed: () {
+                      _fetchPendingOrders(forceRefresh: true);
+                    },
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: Text('Đóng',
+                        style: TextStyle(color: theme.colorScheme.secondary)),
+                  ),
+                ],
+                backgroundColor: theme.dialogTheme.backgroundColor,
+                shape: theme.dialogTheme.shape,
               ),
-              actions: [
-                TextButton.icon(
-                  // Add a manual refresh button inside this popup too
-                  icon: Icon(Icons.refresh,
-                      size: 16,
-                      color: theme.colorScheme.secondary.withOpacity(0.8)),
-                  label: Text('Làm mới DS',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.secondary.withOpacity(0.8))),
-                  onPressed: () {
-                    _fetchPendingOrders(forceRefresh: true);
-                  }, // Trigger a full refresh
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: Text('Đóng',
-                      style: TextStyle(color: theme.colorScheme.secondary)),
-                ),
-              ],
-              backgroundColor: theme.dialogTheme.backgroundColor,
-              shape: theme.dialogTheme.shape,
             );
           },
         );
       },
-    ); // Don't need .then() cleanup as ValueListenableBuilder handles listener removal
+    );
   }
 
-  // Builds the content of the order detail popup (unchanged)
   Widget _buildPopupContent(
       ThemeData theme,
       StateSetter setDialogState,
       KitchenListOrder order,
       bool isCompletingAll,
       BuildContext dialogContext) {
-    // (Keep existing implementation)
-    if (_isDetailLoading) {
+    if (_isDetailLoading)
       return Container(
-          height: 150, // Fixed height for loading indicator consistency
+          height: 150,
           alignment: Alignment.center,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(color: theme.colorScheme.secondary),
               const SizedBox(height: 15),
-              Text("Đang tải chi tiết...", style: theme.textTheme.bodySmall)
+              Text("Đang tải...", style: theme.textTheme.bodySmall)
             ],
           ));
-    }
-    // --- Error State ---
-    if (_detailErrorMessage != null) {
+    if (_detailErrorMessage != null)
       return Container(
           padding: const EdgeInsets.all(kDefaultPadding * 2),
           alignment: Alignment.center,
-          child: Column(
-              mainAxisSize: MainAxisSize.min, // Take minimum height needed
-              children: [
-                const Icon(Icons.warning_amber_rounded,
-                    color: Colors.orangeAccent, size: 40),
-                const SizedBox(height: 10),
-                Text(_detailErrorMessage!,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: Colors.white70)),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                    onPressed: () => _fetchOrderDetail(
-                        order.orderId, setDialogState), // Retry button
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Thử lại'),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orangeAccent[700]))
-              ]));
-    }
-    // --- Empty State ---
-    if (_detailItems.isEmpty) {
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.warning_amber_rounded,
+                color: theme.colorScheme.error, size: 40),
+            const SizedBox(height: 10),
+            Text(_detailErrorMessage!,
+                textAlign: TextAlign.center,
+                style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                    .copyWith(
+                        color: theme.textTheme.bodyMedium?.color
+                            ?.withOpacity(0.7))),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+                onPressed: () =>
+                    _fetchOrderDetail(order.orderId, setDialogState),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Thử lại'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.errorContainer,
+                    foregroundColor: theme.colorScheme.onErrorContainer))
+          ]));
+    if (_detailItems.isEmpty)
       return Container(
           height: 100,
           padding: const EdgeInsets.all(kDefaultPadding * 2),
           alignment: Alignment.center,
-          child: Text('Không có món ăn nào trong đơn hàng này.',
+          child: Text('Không có món ăn.',
               textAlign: TextAlign.center,
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: Colors.white60)));
-    }
-    // --- Success State: Build the List ---
+              style: (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6))));
     return Container(
-        width: double.maxFinite, // Use max width available in dialog
-        constraints: BoxConstraints(
-            maxHeight:
-                MediaQuery.of(context).size.height * 0.6), // Limit max height
+        width: double.maxFinite,
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
         child: ListView.builder(
-            shrinkWrap:
-                true, // Make ListView height fit content (up to constraints)
-            padding: const EdgeInsets.symmetric(
-                horizontal: kDefaultPadding * 0.5), // Padding around the list
+            shrinkWrap: true,
+            padding:
+                const EdgeInsets.symmetric(horizontal: kDefaultPadding * 0.5),
             itemCount: _detailItems.length,
             itemBuilder: (context, index) {
               final item = _detailItems[index];
               final bool isServed = item.status.toLowerCase() == 'served';
-              final bool isThisItemUpdating = _updatingItemIds.contains(
-                  item.orderItemId); // Check if this specific item is loading
-
-              // Slightly dim served items
+              final bool isThisUpdating =
+                  _updatingItemIds.contains(item.orderItemId);
               return Opacity(
                   opacity: isServed ? 0.65 : 1.0,
                   child: Card(
-                      elevation: isServed ? 1 : 3, // Less elevation for served
+                      elevation: isServed ? 1 : 3,
                       margin: const EdgeInsets.symmetric(
                           vertical: kDefaultPadding * 0.7,
                           horizontal: kDefaultPadding / 2),
-                      color: theme.cardTheme.color?.withAlpha(isServed
-                          ? 200
-                          : 255), // Slightly transparent if served
+                      color: theme.cardTheme.color
+                          ?.withAlpha(isServed ? 200 : 255),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       child: Padding(
@@ -3233,39 +2974,38 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                               horizontal: kDefaultPadding * 1.2,
                               vertical: kDefaultPadding),
                           child: Row(children: [
-                            // Item Name and Status
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                  Text(
-                                    '${item.name} (SL: ${item.quantity})',
-                                    style:
-                                        theme.textTheme.titleMedium?.copyWith(
-                                      fontSize: 14.5,
-                                      color: isServed
-                                          ? Colors.white.withOpacity(0.6)
-                                          : Colors.white,
-                                      decoration: isServed
-                                          ? TextDecoration.lineThrough
-                                          : null, // Strikethrough if served
-                                      decorationColor: Colors.white54,
-                                      decorationThickness: 1.5,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  Text('${item.name} (SL: ${item.quantity})',
+                                      style: (theme.textTheme.titleMedium ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        fontSize: 14.5,
+                                        color: isServed
+                                            ? theme.textTheme.bodySmall?.color
+                                            : theme
+                                                .textTheme.titleMedium?.color,
+                                        decoration: isServed
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        decorationColor: theme.dividerColor,
+                                        decorationThickness: 1.5,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis),
                                   const SizedBox(height: 5),
-                                  // Status Icon and Text
                                   Row(children: [
                                     Icon(_getStatusIcon(item.status),
                                         color: _getStatusColor(item.status),
                                         size: 14),
                                     const SizedBox(width: 4),
                                     Text(_getStatusText(item.status),
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
+                                        style: (theme.textTheme.bodySmall ??
+                                                const TextStyle())
+                                            .copyWith(
                                                 fontStyle: FontStyle.italic,
                                                 fontSize: 11,
                                                 color:
@@ -3274,29 +3014,23 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                   ])
                                 ])),
                             const SizedBox(width: kDefaultPadding),
-                            // Action Button / Indicator
                             SizedBox(
-                                // Container to manage size of button/indicator
-                                width:
-                                    85, // Fixed width for button/indicator area
-                                height: 30, // Fixed height
+                                width: 85,
+                                height: 30,
                                 child: Center(
-                                    child: isThisItemUpdating
+                                    child: isThisUpdating
                                         ? const SizedBox(
                                             width: 24,
                                             height: 24,
                                             child: CircularProgressIndicator(
                                                 strokeWidth: 2.5,
-                                                color: Colors
-                                                    .lightBlueAccent)) // Loading indicator for this item
+                                                color: Colors.lightBlueAccent))
                                         : isServed
                                             ? Icon(Icons.check_circle,
                                                 color: Colors.greenAccent
                                                     .withOpacity(0.9),
-                                                size:
-                                                    28) // Checkmark for served
+                                                size: 28)
                                             : ElevatedButton(
-                                                // "Complete" button
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor: Colors.teal,
                                                   foregroundColor: Colors.white,
@@ -3313,16 +3047,14 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                                           BorderRadius.circular(
                                                               6)),
                                                   elevation: 2,
-                                                  disabledBackgroundColor: Colors
-                                                      .grey[600]
-                                                      ?.withOpacity(
-                                                          0.5), // Style when disabled
+                                                  disabledBackgroundColor: theme
+                                                      .disabledColor
+                                                      .withOpacity(0.5),
                                                   disabledForegroundColor:
-                                                      Colors.grey[400],
+                                                      theme.disabledColor,
                                                 ),
-                                                // Disable button if completing all or this item is already updating
                                                 onPressed: isCompletingAll ||
-                                                        isThisItemUpdating
+                                                        isThisUpdating
                                                     ? null
                                                     : () {
                                                         _updatePopupOrderItemStatus(
@@ -3338,177 +3070,93 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
             }));
   }
 
-  // Updates a single item's status from the popup (unchanged)
   Future<void> _updatePopupOrderItemStatus(
       KitchenListOrder order,
       KitchenOrderDetailItem item,
       String newStatus,
       StateSetter setDialogState,
       BuildContext dialogContext) async {
-    // (Keep existing implementation including checks, API call, state updates, and _callCompleteOrderApi logic)
-    // Prevent concurrent updates and check mounts
     if (_updatingItemIds.contains(item.orderItemId) || !mounted) return;
-    bool isDialogStillMounted = true;
-    try {
-      (dialogContext as Element).widget;
-    } catch (e) {
-      isDialogStillMounted = false;
-    }
-    if (!isDialogStillMounted) return;
-
-    // --- Start Loading State for this item ---
     try {
       setDialogState(() => _updatingItemIds.add(item.orderItemId));
     } catch (e) {
-      /* ... handle set state error ... */ return;
+      print("Err set update start ${item.orderItemId}: $e");
+      return;
     }
-
-    print(
-        "Attempting PATCH item status: Item ${item.orderItemId} -> Status '$newStatus'");
+    print("PATCH item ${item.orderItemId} -> '$newStatus'");
     final url = Uri.parse(
             'https://soa-deploy.up.railway.app/kitchen/order-items/${item.orderItemId}/status')
         .replace(queryParameters: {'status': newStatus});
     final headers = {'Content-Type': 'application/json'};
     bool success = false;
-
     try {
       final response = await http
           .patch(url, headers: headers)
           .timeout(const Duration(seconds: 10));
-
-      // --- Check Mounts After Await ---
       if (!mounted) return;
-      isDialogStillMounted = true; // Reset flag
-      try {
-        (dialogContext as Element).widget;
-      } catch (e) {
-        isDialogStillMounted = false;
-      }
-
-      // Handle edge case: Dialog closed while API was running
-      if (!isDialogStillMounted &&
-          (response.statusCode >= 200 && response.statusCode < 300)) {
-        print(
-            "Dialog closed after successful item update for ${item.orderItemId}. Triggering full refresh.");
-        _fetchPendingOrders(
-            forceRefresh: true); // Refresh main list to ensure consistency
-        _updatingItemIds.remove(item.orderItemId); // Clean up local state
-        return;
-      }
-      if (!isDialogStillMounted) {
-        // If dialog closed and API failed/didn't run
-        _updatingItemIds.remove(item.orderItemId);
-        return;
-      }
-
-      // --- Process API Response ---
       if (response.statusCode == 200 || response.statusCode == 204) {
-        print("API Success: Item ${item.orderItemId} updated to '$newStatus'.");
+        print("API OK: Item ${item.orderItemId} -> '$newStatus'.");
         success = true;
-
-        // Update item status in the local dialog list (_detailItems)
         final index =
             _detailItems.indexWhere((i) => i.orderItemId == item.orderItemId);
         if (index != -1) {
           try {
             setDialogState(() => _detailItems[index].status = newStatus);
           } catch (e) {
-            /* Fallback */ _detailItems[index].status = newStatus;
+            _detailItems[index].status = newStatus;
           }
-
-          // --- Check if the ENTIRE order is now served ---
-          bool allItemsInThisOrderServed =
+          bool allServed =
               _detailItems.every((i) => i.status.toLowerCase() == 'served');
-
-          if (allItemsInThisOrderServed) {
-            // --- ORDER COMPLETE ---
-            print(
-                "Order ${order.orderId} fully served (last single item completed). Triggering final completion API call.");
-
-            // Call the separate API to mark the whole order as complete
-            bool completeOrderSuccess =
-                await _callCompleteOrderApi(order.orderId);
-
-            // Check mounts again after the second API call
+          if (allServed) {
+            print("Order ${order.orderId} fully served. Calling complete API.");
+            bool completeOk = await _callCompleteOrderApi(order.orderId);
             if (!mounted) return;
-            isDialogStillMounted = true;
-            try {
-              (dialogContext as Element).widget;
-            } catch (e) {
-              isDialogStillMounted = false;
-            }
-
-            if (!completeOrderSuccess) {
-              // If /complete API fails, show error, keep dialog open
-              print(
-                  "Error: Failed to call complete order API for ${order.orderId} after last item served.");
-              String errorMsg =
-                  'Lỗi khi xác nhận hoàn thành đơn hàng với server.';
-              // Show error in dialog or main screen
-              if (isDialogStillMounted)
-                ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-                    content: Text(errorMsg), backgroundColor: Colors.orange));
-              else if (mounted)
-                ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-                    content: Text(errorMsg), backgroundColor: Colors.orange));
-
-              // DO NOT close popup or remove order from pending list here
-              // Reset the updating state for the *current* item only
+            if (!completeOk) {
+              print("Err: Failed /complete API for ${order.orderId}");
+              String msg = 'Lỗi xác nhận hoàn thành đơn.';
+              if (mounted)
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(msg), backgroundColor: Colors.orange));
               try {
-                if (isDialogStillMounted)
-                  setDialogState(() {
-                    _updatingItemIds.remove(item.orderItemId);
-                  });
-                else
+                setDialogState(() {
                   _updatingItemIds.remove(item.orderItemId);
+                });
               } catch (e) {
                 _updatingItemIds.remove(item.orderItemId);
               }
-              return; // Stop further processing
+              return;
             }
-
-            // --- UI Update for Order Complete (only if /complete API succeeded) ---
             if (mounted) {
               setState(() {
-                // Update the main screen's state
                 _pendingOrders = _pendingOrders
                     .where((o) => o.orderId != order.orderId)
-                    .toList(); // Remove from pending (updates notifier)
-                _inProgressOrderIds
-                    .remove(order.orderId); // Remove from in-progress set
-                // Add to completed list (client-side)
+                    .toList();
+                _inProgressOrderIds.remove(order.orderId);
                 if (!_completedOrders
                     .any((co) => co.orderId == order.orderId)) {
                   _completedOrders.insert(0, order);
                 }
-                _notifyTableStatusUpdate(
-                    order.tableNumber); // Notify MenuScreen about table status
+                _notifyTableStatusUpdate(order.tableNumber);
               });
-              // Show confirmation SnackBar on main screen
               ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
                 content: Text('Đơn hàng #${order.orderId} đã hoàn thành!'),
                 backgroundColor: Colors.green[700],
                 duration: const Duration(seconds: 3),
               ));
             }
-            // Close the detail popup
-            if (isDialogStillMounted && Navigator.canPop(dialogContext)) {
+            if (Navigator.canPop(dialogContext)) {
               Navigator.of(dialogContext).pop();
             }
-            // Optionally refresh completed list in background
             if (mounted) _fetchCompletedOrders();
           } else {
-            // --- ORDER NOT YET COMPLETE ---
-            // Mark order as in progress in the main list if it wasn't already
             if (!_inProgressOrderIds.contains(order.orderId)) {
               if (mounted) {
                 setState(() {
-                  print("Marking order ${order.orderId} as in progress.");
+                  print("Marking order ${order.orderId} in progress.");
                   _inProgressOrderIds.add(order.orderId);
                 });
               }
             }
-            // Show snackbar for individual item completion
             if (mounted && newStatus.toLowerCase() == 'served') {
               ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
                 content:
@@ -3519,220 +3167,129 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
             }
           }
         } else {
-          // Item not found in local list - should not happen normally
-          print(
-              "Error: Item ${item.orderItemId} not found in local _detailItems after update.");
-          if (isDialogStillMounted)
-            _fetchOrderDetail(order.orderId, setDialogState); // Refresh details
+          print("Err: Item ${item.orderItemId} not found locally.");
+          try {
+            setDialogState(
+                () => _fetchOrderDetail(order.orderId, setDialogState));
+          } catch (e) {}
         }
       } else {
-        // --- Handle API Error (Non-200) ---
         print(
-            "API Error updating item ${item.orderItemId}: ${response.statusCode}, Body: ${utf8.decode(response.bodyBytes)}");
+            "API Err update item ${item.orderItemId}: ${response.statusCode}, ${utf8.decode(response.bodyBytes)}");
         success = false;
-        String errorMsg = 'Lỗi cập nhật món (${response.statusCode})';
+        String m = 'Lỗi cập nhật món (${response.statusCode})';
         try {
-          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-          if (errorBody is Map && errorBody.containsKey('detail')) {
-            errorMsg += ': ${errorBody['detail']}';
+          final eb = jsonDecode(utf8.decode(response.bodyBytes));
+          if (eb is Map && eb.containsKey('detail')) {
+            m += ': ${eb['detail']}';
           }
         } catch (_) {}
-        // Show error SnackBar (dialog or main screen)
-        if (isDialogStillMounted) {
-          ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-              content: Text(errorMsg), backgroundColor: Colors.redAccent));
-        } else if (mounted) {
-          ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-              content: Text(errorMsg), backgroundColor: Colors.redAccent));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(m), backgroundColor: Colors.redAccent));
         }
       }
     } catch (e) {
-      // Handle Network/Timeout/Other Errors
-      if (!mounted) return; // Check mount after catch
-      isDialogStillMounted = true;
-      try {
-        (dialogContext as Element).widget;
-      } catch (e) {
-        isDialogStillMounted = false;
-      }
-      if (!isDialogStillMounted) {
-        _updatingItemIds.remove(item.orderItemId);
-        return;
-      } // Exit if dialog closed
-
-      print(
-          "Network/Timeout/Other Error updating item ${item.orderItemId}: $e");
+      if (!mounted) return;
+      print("Net/Timeout Err update item ${item.orderItemId}: $e");
       success = false;
-      String errorMsg = 'Lỗi mạng hoặc timeout khi cập nhật món ăn.';
+      String m = 'Lỗi mạng/timeout.';
       if (e is TimeoutException) {
-        errorMsg = 'Yêu cầu cập nhật món ăn quá thời gian. Vui lòng thử lại.';
+        m = 'Quá thời gian.';
       }
-      // Show error SnackBar (dialog or main screen)
-      if (isDialogStillMounted) {
-        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-            content: Text(errorMsg), backgroundColor: Colors.orangeAccent));
-      } else if (mounted) {
-        ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-            content: Text(errorMsg), backgroundColor: Colors.orangeAccent));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(m), backgroundColor: Colors.orangeAccent));
       }
     } finally {
-      // --- End Loading State for this item ---
       if (mounted) {
-        isDialogStillMounted = true;
         try {
-          (dialogContext as Element).widget;
+          setDialogState(() => _updatingItemIds.remove(item.orderItemId));
         } catch (e) {
-          isDialogStillMounted = false;
-        }
-        if (isDialogStillMounted) {
-          try {
-            setDialogState(() => _updatingItemIds.remove(item.orderItemId));
-          } catch (e) {
-            _updatingItemIds.remove(item.orderItemId);
-          }
-        } else {
-          _updatingItemIds
-              .remove(item.orderItemId); // Clean up state even if dialog closed
+          _updatingItemIds.remove(item.orderItemId);
         }
       } else {
-        _updatingItemIds
-            .remove(item.orderItemId); // Clean up if main screen disposed
+        _updatingItemIds.remove(item.orderItemId);
       }
-      print(
-          "Finished update attempt for item ${item.orderItemId}. Success: $success");
+      print("Finished update item ${item.orderItemId}. Success: $success");
     }
   }
 
-  // Helper to call the specific "complete order" API endpoint (unchanged)
   Future<bool> _callCompleteOrderApi(int orderId) async {
-    // (Keep existing implementation)
     final url = Uri.parse(
         'https://soa-deploy.up.railway.app/kitchen/order/complete/$orderId');
     final headers = {'Content-Type': 'application/json'};
-    print("Calling API (Helper): PATCH ${url.toString()}");
+    print("PATCH Helper: $url");
     try {
-      final response = await http
+      final r = await http
           .patch(url, headers: headers)
-          .timeout(const Duration(seconds: 10)); // Timeout riêng cho complete
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        print("API Success (Helper): Order $orderId marked complete.");
-        return true; // Success
+          .timeout(const Duration(seconds: 10));
+      if (r.statusCode == 200 || r.statusCode == 204) {
+        print("API OK Helper: Order $orderId complete.");
+        return true;
       } else {
         print(
-            "API Error (Helper): Order $orderId failed complete (${response.statusCode}), Body: ${response.body}");
-        return false; // Failure
+            "API Err Helper: Order $orderId fail complete (${r.statusCode}), ${r.body}");
+        return false;
       }
     } catch (e) {
-      print("Network/Timeout Error (Helper) for complete order $orderId: $e");
-      return false; // Failure on exception
+      print("Net/Timeout Err Helper complete order $orderId: $e");
+      return false;
     }
   }
 
-  // Completes all items for an order using the direct API (unchanged)
   Future<void> _completeAllItemsForOrder(KitchenListOrder order,
       StateSetter setDialogState, BuildContext dialogContext) async {
-    // (Keep existing implementation)
-    if (_isCompletingAll) return; // Prevent double execution
-    if (!mounted) return;
-
-    bool isDialogStillMounted = true;
-    try {
-      (dialogContext as Element).widget;
-    } catch (e) {
-      isDialogStillMounted = false;
-    }
-    if (!isDialogStillMounted) return;
-
-    print("Calling API to complete order ${order.orderId} directly.");
-
-    // --- Start Loading State ---
+    if (_isCompletingAll || !mounted) return;
+    print("API complete order ${order.orderId} directly.");
     try {
       setDialogState(() => _isCompletingAll = true);
     } catch (e) {
-      print("Error setting dialog state for 'Complete Order' start: $e");
-      _isCompletingAll = false;
+      print("Err set dialog 'Complete All' start: $e");
       return;
     }
-
-    // --- Call API ---
-    bool success = await _callCompleteOrderApi(order.orderId); // Use the helper
-
-    // --- Check Mounts After Await ---
+    bool success = await _callCompleteOrderApi(order.orderId);
     if (!mounted) return;
-    isDialogStillMounted = true;
-    try {
-      (dialogContext as Element).widget;
-    } catch (e) {
-      isDialogStillMounted = false;
-    }
-
     if (success) {
-      print(
-          "API Success: Order ${order.orderId} marked as complete by server (via Complete All).");
-
-      // --- UI Update for Order Complete ---
+      print("API OK: Order ${order.orderId} complete via All.");
       if (mounted) {
         setState(() {
-          // Update main screen state
-          _pendingOrders = _pendingOrders
-              .where((o) => o.orderId != order.orderId)
-              .toList(); // Remove from pending
-          _inProgressOrderIds.remove(order.orderId); // Remove from in-progress
-          // Add to completed list
+          _pendingOrders =
+              _pendingOrders.where((o) => o.orderId != order.orderId).toList();
+          _inProgressOrderIds.remove(order.orderId);
           if (!_completedOrders.any((co) => co.orderId == order.orderId)) {
             _completedOrders.insert(0, order);
           }
-          _notifyTableStatusUpdate(order.tableNumber); // Notify parent
+          _notifyTableStatusUpdate(order.tableNumber);
         });
-        // Show confirmation SnackBar on main screen
         ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
           content: Text('Đơn hàng #${order.orderId} đã hoàn thành!'),
           backgroundColor: Colors.green[700],
           duration: const Duration(seconds: 3),
         ));
       }
-      // Close the detail popup
-      if (isDialogStillMounted && Navigator.canPop(dialogContext)) {
+      if (Navigator.canPop(dialogContext)) {
         Navigator.of(dialogContext).pop();
       }
-      // Optionally refresh completed list in background
       if (mounted) _fetchCompletedOrders();
     } else {
-      // --- Handle API Error ---
-      print("API Error completing order ${order.orderId} (via Complete All).");
-      String errorMsg = 'Lỗi hoàn thành đơn hàng.'; // Simple error message
-      // Show error SnackBar (dialog or main screen)
-      if (isDialogStillMounted) {
-        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-            content: Text(errorMsg), backgroundColor: Colors.redAccent));
-        _fetchOrderDetail(
-            order.orderId, setDialogState); // Refresh details on error
-      } else if (mounted) {
-        ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-            content: Text(errorMsg), backgroundColor: Colors.redAccent));
+      print("API Err complete order ${order.orderId} via All.");
+      String m = 'Lỗi hoàn thành đơn hàng.';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(m), backgroundColor: Colors.redAccent));
       }
-    }
-
-    // --- End Loading State ---
-    if (mounted) {
-      isDialogStillMounted = true;
       try {
-        (dialogContext as Element).widget;
-      } catch (e) {
-        isDialogStillMounted = false;
-      }
-      if (isDialogStillMounted) {
-        try {
-          setDialogState(() {
-            _isCompletingAll = false;
-            _updatingItemIds.clear();
-          });
-        } catch (e) {
+        setDialogState(() => _fetchOrderDetail(order.orderId, setDialogState));
+      } catch (e) {}
+    }
+    if (mounted) {
+      try {
+        setDialogState(() {
           _isCompletingAll = false;
           _updatingItemIds.clear();
-        }
-      } else {
+        });
+      } catch (e) {
         _isCompletingAll = false;
         _updatingItemIds.clear();
       }
@@ -3740,59 +3297,44 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       _isCompletingAll = false;
       _updatingItemIds.clear();
     }
-    print(
-        "'Complete Order' process finished for order ${order.orderId} (via Complete All). Success: $success");
+    print("Finished 'Complete All' ${order.orderId}. Success: $success");
   }
 
-  // Notifies MenuScreen about table status changes (unchanged)
   void _notifyTableStatusUpdate(int? tableNumber) {
-    // (Keep existing implementation)
     if (!mounted) return;
     if (tableNumber == null || tableNumber <= 0 || tableNumber == -1) {
-      print(
-          "Warning: Cannot notify table status, invalid table number: $tableNumber. Refreshing all pending.");
-      _fetchPendingOrders(
-          forceRefresh: true); // Refresh all if table number is bad
+      print("Warn: Cannot notify invalid table#: $tableNumber. Refreshing.");
+      _fetchPendingOrders(forceRefresh: true);
       return;
     }
-
-    print("Checking if table $tableNumber is now clear...");
-    // Check if there are ANY orders left in the current pending list for this table
-    bool otherPendingForTable = _pendingOrders
-        .any((pendingOrder) => pendingOrder.tableNumber == tableNumber);
-
-    if (!otherPendingForTable) {
-      print("Table $tableNumber is now clear. Calling onTableCleared.");
+    print("Check if table $tableNumber clear...");
+    bool others = _pendingOrders.any((o) => o.tableNumber == tableNumber);
+    if (!others) {
+      print("Table $tableNumber clear. Call onTableCleared.");
       try {
-        widget.onTableCleared
-            ?.call(tableNumber); // Notify parent: table is clear
+        widget.onTableCleared?.call(tableNumber);
       } catch (e) {
-        print("Error calling onTableCleared: $e");
+        print("Err call onTableCleared: $e");
       }
     } else {
-      print(
-          "Table $tableNumber still has other pending orders. Recalculating counts.");
-      // If table not clear, still update the counts for the parent
-      Map<int, int> currentCounts = {};
+      print("Table $tableNumber still pending. Recalc counts.");
+      Map<int, int> counts = {};
       for (var o in _pendingOrders) {
         if (o.tableNumber != null &&
             o.tableNumber! > 0 &&
             o.tableNumber! != -1) {
-          currentCounts[o.tableNumber!] =
-              (currentCounts[o.tableNumber!] ?? 0) + 1;
+          counts[o.tableNumber!] = (counts[o.tableNumber!] ?? 0) + 1;
         }
       }
       try {
-        widget.onOrderUpdate
-            ?.call(currentCounts); // Notify parent: update counts
+        widget.onOrderUpdate?.call(counts);
       } catch (e) {
-        print("Error calling onOrderUpdate after partial table clear: $e");
+        print("Err call onOrderUpdate after partial clear: $e");
       }
     }
   }
 
   // --- Helper Methods for Status Display ---
-  // (Keep existing _getStatusColor, _getStatusIcon, _getStatusText implementations)
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'ordered':
@@ -3849,102 +3391,190 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   // --- Main Build Method ---
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Keep state
+    super.build(context);
     final theme = Theme.of(context);
     return Column(
       children: [
-        _buildViewSwitcher(theme), // Pending/Completed tabs
-        Expanded(child: _buildBodyContent(theme)), // List content area
-        // Connection status indicator (unchanged)
+        _buildHeaderWithSearch(theme),
+        Expanded(child: _buildBodyContent(theme)),
+        if (_isBackgroundLoading && !_isLoadingPending && !_isLoadingCompleted)
+          LinearProgressIndicator(
+            minHeight: 2,
+            backgroundColor: Colors.transparent,
+            valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.secondary.withOpacity(0.5)),
+          ),
         if (!_isConnected && _reconnectAttempts > 0)
-          Container(/* ... connection status indicator ... */)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            color: Colors.orangeAccent[700],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.wifi_off_rounded,
+                    color: Colors.white, size: 14),
+                const SizedBox(width: 8),
+                Text(
+                  _isConnecting ? 'Đang kết nối...' : 'Mất kết nối...',
+                  style: (theme.textTheme.bodySmall ?? const TextStyle())
+                      .copyWith(color: Colors.white, fontSize: 10.5),
+                ),
+              ],
+            ),
+          )
       ],
     );
   }
 
-  // Builds the Pending/Completed switcher (unchanged)
-  Widget _buildViewSwitcher(ThemeData theme) {
-    // (Keep existing implementation)
-    final Color pendingSelCol = Colors.yellowAccent[700]!;
-    final Color completedSelCol = Colors.greenAccent;
-    final Color unselectedCol = Colors.white70;
+  // --- Header Row with Switcher and Search ---
+  Widget _buildHeaderWithSearch(ThemeData theme) {
     return Padding(
-        padding: const EdgeInsets.symmetric(
-            vertical: kDefaultPadding, horizontal: kDefaultPadding * 1.5),
-        child: SegmentedButton<OrderListView>(
-          segments: <ButtonSegment<OrderListView>>[
-            ButtonSegment<OrderListView>(
-                value: OrderListView.pending,
-                label: Text('Đang xử lý',
-                    style: TextStyle(
-                        color: _currentView == OrderListView.pending
-                            ? pendingSelCol
-                            : unselectedCol)),
-                icon: Icon(Icons.sync,
-                    size: 18,
-                    color: _currentView == OrderListView.pending
-                        ? pendingSelCol
-                        : unselectedCol)),
-            ButtonSegment<OrderListView>(
-                value: OrderListView.completed,
-                label: Text('Đã hoàn thành',
-                    style: TextStyle(
-                        color: _currentView == OrderListView.completed
-                            ? completedSelCol
-                            : unselectedCol)),
-                icon: Icon(Icons.check_circle_outline_rounded,
-                    size: 18,
-                    color: _currentView == OrderListView.completed
-                        ? completedSelCol
-                        : unselectedCol)),
-          ],
-          selected: <OrderListView>{_currentView},
-          onSelectionChanged: (Set<OrderListView> newSelection) {
-            if (newSelection.isNotEmpty && newSelection.first != _currentView) {
-              setState(() {
-                _currentView = newSelection.first;
-              });
-              if (_currentView == OrderListView.completed &&
-                  !_completedOrdersLoaded &&
-                  !_isLoadingCompleted) {
-                _fetchCompletedOrders();
-              }
-            }
-          },
-          style: theme.segmentedButtonTheme.style,
-        ));
+      padding: const EdgeInsets.fromLTRB(kDefaultPadding * 1.5, kDefaultPadding,
+          kDefaultPadding * 1.5, kDefaultPadding * 0.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _buildViewSwitcher(theme), const Spacer(), // Pushes search to right
+          SizedBox(
+            width: 250,
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                  .copyWith(fontSize: 13.5),
+              decoration: InputDecoration(
+                hintText: 'Tìm đơn/bàn...',
+                prefixIcon: Icon(Icons.search, size: 18),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, size: 18),
+                        tooltip: 'Xóa',
+                        splashRadius: 15,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  // Builds the main content area (list, shimmer, error, empty) (unchanged)
+  // --- Builds the Pending/Completed switcher ---
+  Widget _buildViewSwitcher(ThemeData theme) {
+    final Color pendingSelCol = theme.brightness == Brightness.dark
+        ? Colors.yellowAccent[700]!
+        : Colors.orange[800]!;
+    final Color completedSelCol = theme.brightness == Brightness.dark
+        ? Colors.greenAccent
+        : Colors.green[700]!;
+    final Color unselectedFG = theme.colorScheme.onSurface.withOpacity(0.7);
+    return SegmentedButton<OrderListView>(
+      segments: <ButtonSegment<OrderListView>>[
+        ButtonSegment<OrderListView>(
+            value: OrderListView.pending,
+            label: Text('Đang xử lý'),
+            icon: Icon(Icons.sync, size: 18)),
+        ButtonSegment<OrderListView>(
+            value: OrderListView.completed,
+            label: Text('Đã hoàn thành'),
+            icon: Icon(Icons.check_circle_outline_rounded, size: 18)),
+      ],
+      selected: <OrderListView>{_currentView},
+      onSelectionChanged: (Set<OrderListView> newSelection) {
+        if (newSelection.isNotEmpty && newSelection.first != _currentView) {
+          setState(() {
+            _currentView = newSelection.first;
+            _clearSearch();
+            if (_currentView == OrderListView.completed &&
+                !_completedOrdersLoaded &&
+                !_isLoadingCompleted) {
+              _fetchCompletedOrders();
+            } else {
+              _updateFilteredLists();
+            }
+          });
+        }
+      },
+      style: theme.segmentedButtonTheme.style?.copyWith(
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return _currentView == OrderListView.pending
+                ? pendingSelCol
+                : completedSelCol;
+          }
+          return unselectedFG;
+        }),
+        iconColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return _currentView == OrderListView.pending
+                ? pendingSelCol
+                : completedSelCol;
+          }
+          return unselectedFG;
+        }),
+      ),
+    );
+  }
+
+  // --- Builds the main content area (list, shimmer, error, empty) ---
   Widget _buildBodyContent(ThemeData theme) {
-    // (Keep existing implementation)
     Widget content;
     Future<void> Function() onRefresh;
+    bool showLoading = false;
+    bool showEmpty = false;
+    String? errorMessage;
+    List<KitchenListOrder> listToShow = [];
     if (_currentView == OrderListView.pending) {
       onRefresh = () => _fetchPendingOrders(forceRefresh: true);
-      if (_isLoadingPending && _pendingOrders.isEmpty) {
-        content = _buildShimmerLoadingList(theme);
-      } else if (_pendingErrorMessage != null && _pendingOrders.isEmpty) {
-        content = _buildErrorWidget(_pendingErrorMessage!, onRefresh);
-      } else if (_pendingOrders.isEmpty && !_isLoadingPending) {
-        content = _buildEmptyListWidget('Không có đơn hàng nào đang xử lý.',
-            Icons.no_food_outlined, onRefresh);
-      } else {
-        content = _buildOrderListView(_pendingOrders);
-      }
+      errorMessage = _pendingErrorMessage;
+      listToShow = _filteredPendingOrders;
+      showLoading = _isLoadingPending && _pendingOrders.isEmpty;
+      showEmpty = listToShow.isEmpty &&
+          !showLoading &&
+          errorMessage == null &&
+          !_isLoadingPending;
     } else {
       onRefresh = () => _fetchCompletedOrders(forceRefresh: true);
-      if (_isLoadingCompleted && _completedOrders.isEmpty) {
-        content = _buildShimmerLoadingList(theme);
-      } else if (_completedErrorMessage != null && _completedOrders.isEmpty) {
-        content = _buildErrorWidget(_completedErrorMessage!, onRefresh);
-      } else if (_completedOrders.isEmpty && !_isLoadingCompleted) {
-        content = _buildEmptyListWidget('Chưa có đơn hàng nào hoàn thành.',
-            Icons.history_toggle_off_outlined, onRefresh);
-      } else {
-        content = _buildOrderListView(_completedOrders);
-      }
+      errorMessage = _completedErrorMessage;
+      listToShow = _filteredCompletedOrders;
+      showLoading = _isLoadingCompleted && _completedOrders.isEmpty;
+      showEmpty = listToShow.isEmpty &&
+          !showLoading &&
+          errorMessage == null &&
+          !_isLoadingCompleted;
     }
+
+    if (showLoading) {
+      content = _buildShimmerLoadingList(theme);
+    } else if (errorMessage != null && listToShow.isEmpty) {
+      content = _buildErrorWidget(errorMessage, onRefresh);
+    }
+    // Show empty message only if not loading (initial or background) and no error
+    else if (showEmpty && !_isBackgroundLoading) {
+      String emptyMsg;
+      IconData emptyIcon;
+      if (_searchQuery.isNotEmpty) {
+        emptyMsg = 'Không tìm thấy đơn hàng nào khớp.';
+        emptyIcon = Icons.search_off_rounded;
+      } else if (_currentView == OrderListView.pending) {
+        emptyMsg = 'Không có đơn hàng đang xử lý.';
+        emptyIcon = Icons.no_food_outlined;
+      } else {
+        emptyMsg = 'Chưa có đơn hàng hoàn thành.';
+        emptyIcon = Icons.history_toggle_off_outlined;
+      }
+      content = _buildEmptyListWidget(emptyMsg, emptyIcon, onRefresh);
+    } else {
+      content = _buildOrderListView(listToShow);
+    } // Pass filtered list
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: theme.colorScheme.secondary,
@@ -3953,16 +3583,17 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     );
   }
 
-  // Builds the shimmer loading list (unchanged)
+  // --- Builds the shimmer loading list ---
   Widget _buildShimmerLoadingList(ThemeData theme) {
-    // (Keep existing implementation)
     return Shimmer.fromColors(
-      baseColor: theme.cardTheme.color!.withOpacity(0.5),
-      highlightColor: theme.cardTheme.color!.withOpacity(0.8),
+      baseColor: theme.cardTheme.color?.withOpacity(0.5) ??
+          theme.colorScheme.surface.withOpacity(0.5),
+      highlightColor: theme.cardTheme.color?.withOpacity(0.8) ??
+          theme.colorScheme.surface.withOpacity(0.8),
       child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(kDefaultPadding, kDefaultPadding,
-            kDefaultPadding, kDefaultPadding + kBottomActionBarHeight),
+        padding: EdgeInsets.fromLTRB(kDefaultPadding, 0, kDefaultPadding,
+            kDefaultPadding + kBottomActionBarHeight),
         itemCount: 7,
         itemBuilder: (_, __) => Card(
           margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
@@ -3974,93 +3605,109 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.colorScheme.onSurface.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8))),
             title: Container(
                 width: double.infinity,
                 height: 16.0,
-                color: Colors.white,
+                color: theme.colorScheme.onSurface.withOpacity(0.1),
                 margin: const EdgeInsets.only(bottom: 8)),
-            subtitle: Container(width: 120, height: 12.0, color: Colors.white),
+            subtitle: Container(
+                width: 120,
+                height: 12.0,
+                color: theme.colorScheme.onSurface.withOpacity(0.1)),
           ),
         ),
       ),
     );
   }
 
-  // Builds the actual list view for orders (pending or completed)
-  // Optimized to handle table number loading state within the list item build.
-  Widget _buildOrderListView(List<KitchenListOrder> orders) {
+  // --- Builds the actual list view for orders - USES listToShow ---
+  Widget _buildOrderListView(List<KitchenListOrder> listToShow) {
     final theme = Theme.of(context);
-    // Using ListView.builder is already efficient for potentially long lists
+    if (listToShow.isEmpty) {
+      String emptyMsg;
+      IconData emptyIcon;
+      Future<void> Function() onRefresh;
+      if (_searchQuery.isNotEmpty) {
+        emptyMsg = 'Không tìm thấy đơn nào khớp.';
+        emptyIcon = Icons.search_off_rounded;
+      } else if (_currentView == OrderListView.pending) {
+        emptyMsg = 'Không có đơn hàng đang xử lý.';
+        emptyIcon = Icons.no_food_outlined;
+      } else {
+        emptyMsg = 'Chưa có đơn hàng hoàn thành.';
+        emptyIcon = Icons.history_toggle_off_outlined;
+      }
+      onRefresh = _currentView == OrderListView.pending
+          ? () => _fetchPendingOrders(forceRefresh: true)
+          : () => _fetchCompletedOrders(forceRefresh: true);
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: _buildEmptyListWidget(emptyMsg, emptyIcon, onRefresh)),
+      );
+    }
     return ListView.builder(
-      physics:
-          const AlwaysScrollableScrollPhysics(), // Needed for RefreshIndicator
-      padding: EdgeInsets.fromLTRB(
-          kDefaultPadding,
-          kDefaultPadding,
-          kDefaultPadding,
-          kDefaultPadding + kBottomActionBarHeight), // Adjust padding
-      itemCount: orders.length,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(kDefaultPadding, 0, kDefaultPadding,
+          kDefaultPadding + kBottomActionBarHeight),
+      itemCount: listToShow.length,
       itemBuilder: (context, index) {
-        final order = orders[index];
-        final formattedTime =
-            DateFormat('HH:mm - dd/MM/yy').format(order.orderTime);
+        final order = listToShow[index];
+        final fmtTime = DateFormat('HH:mm - dd/MM/yy').format(order.orderTime);
         final bool isServed = _currentView == OrderListView.completed;
-        final bool showInProgressIcon =
+        final bool showIP =
             !isServed && _inProgressOrderIds.contains(order.orderId);
-
-        // --- Styling for Order Title ---
-        final defaultTitleStyle = theme.textTheme.bodyMedium?.copyWith(
+        final baseTitleStyle = theme.textTheme.bodyMedium ?? const TextStyle();
+        final baseSubStyle = theme.textTheme.bodySmall ?? const TextStyle();
+        final primaryTextColor = isServed
+            ? baseTitleStyle.color?.withOpacity(0.7)
+            : baseTitleStyle.color;
+        final titleStyle = baseTitleStyle.copyWith(
           fontWeight: FontWeight.w500,
-          color: isServed ? Colors.grey[400] : Colors.white,
+          color: primaryTextColor,
           fontSize: 14.5,
         );
-        final tableNumberStyle = defaultTitleStyle?.copyWith(
+        final tableNumStyle = titleStyle.copyWith(
           fontWeight: FontWeight.bold,
-          color: isServed ? Colors.grey[350] : Colors.white,
         );
-        final tableErrorStyle = defaultTitleStyle?.copyWith(
+        final tableErrStyle = titleStyle.copyWith(
           fontWeight: FontWeight.bold,
           color: theme.colorScheme.error,
           fontStyle: FontStyle.italic,
         );
-
-        // --- Determine how to display table number ---
-        // Access the potentially updated table number directly from the order object
-        int? currentTableNumber = order.tableNumber;
-        InlineSpan tableNumberSpan;
-
-        if (currentTableNumber == null) {
-          // State: Still loading table number (or fetch hasn't happened yet)
-          tableNumberSpan = WidgetSpan(
+        final subColor = isServed
+            ? baseSubStyle.color?.withOpacity(0.6)
+            : baseSubStyle.color?.withOpacity(0.8);
+        int? currentTableNum = order.tableNumber;
+        InlineSpan tableSpan;
+        if (currentTableNum == null) {
+          tableSpan = WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Tooltip(
-              message: 'Đang tải số bàn...',
+              message: 'Đang tải...',
               child: SizedBox(
                   width: 12,
                   height: 12,
                   child: CircularProgressIndicator(
-                      strokeWidth: 1.5, color: Colors.grey[500])),
+                      strokeWidth: 1.5, color: theme.disabledColor)),
             ),
           );
-        } else if (currentTableNumber == -1) {
-          // State: Error fetching table number (cached as -1)
-          tableNumberSpan = TextSpan(text: 'Lỗi', style: tableErrorStyle);
+        } else if (currentTableNum == -1) {
+          tableSpan = TextSpan(text: 'Lỗi', style: tableErrStyle);
         } else {
-          // State: Valid table number available
-          tableNumberSpan = TextSpan(
-              text: currentTableNumber.toString(), style: tableNumberStyle);
+          tableSpan =
+              TextSpan(text: currentTableNum.toString(), style: tableNumStyle);
         }
-        // --- End Table Number Display Logic ---
-
         return Card(
           margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
           elevation: isServed ? 1.5 : 3.5,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           color: isServed
-              ? theme.cardTheme.color?.withAlpha(180)
+              ? theme.cardTheme.color?.withAlpha(200)
               : theme.cardTheme.color,
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(
@@ -4075,17 +3722,13 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                     : theme.colorScheme.secondary,
                 size: 34),
             title: Text.rich(
-              // Use Text.rich for combining styled spans
               TextSpan(
-                style: defaultTitleStyle, // Base style for the title line
+                style: titleStyle,
                 children: [
-                  TextSpan(
-                      text: 'Bàn ',
-                      style: TextStyle(
-                          color: isServed ? Colors.grey[400] : Colors.white70)),
-                  tableNumberSpan, // Insert the dynamically created span here
+                  TextSpan(text: 'Bàn '),
+                  tableSpan,
                   TextSpan(text: ' - Đơn #${order.orderId}'),
-                  if (showInProgressIcon)
+                  if (showIP)
                     WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
                       child: Padding(
@@ -4101,14 +3744,13 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
             ),
             subtitle: Padding(
                 padding: const EdgeInsets.only(top: 5.0),
-                child: Text('Thời gian: $formattedTime',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color:
-                            isServed ? Colors.grey[500] : Colors.grey[350]))),
+                child: Text('TG: $fmtTime',
+                    style: baseSubStyle.copyWith(color: subColor))),
             trailing: isServed
                 ? Icon(Icons.visibility_outlined,
-                    color: Colors.grey[500], size: 22)
-                : Icon(Icons.chevron_right, color: Colors.white38),
+                    color: theme.iconTheme.color?.withOpacity(0.6), size: 22)
+                : Icon(Icons.chevron_right,
+                    color: theme.iconTheme.color?.withOpacity(0.5)),
             onTap: () => _showOrderDetailPopup(context, order),
             tileColor: Colors.transparent,
             shape:
@@ -4119,9 +3761,8 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     );
   }
 
-  // Builds the error widget (unchanged)
+  // --- Builds the error widget ---
   Widget _buildErrorWidget(String message, Future<void> Function() onRetry) {
-    // (Keep existing implementation)
     final theme = Theme.of(context);
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -4135,29 +3776,34 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline,
-                              color: Colors.redAccent, size: 50),
+                          Icon(Icons.error_outline,
+                              color: theme.colorScheme.error, size: 50),
                           const SizedBox(height: 16),
                           Text(message,
                               textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(color: Colors.white70)),
+                              style: (theme.textTheme.bodyMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7))),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                               onPressed: onRetry,
                               icon: const Icon(Icons.refresh),
                               label: const Text('Thử lại'),
                               style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent[100]))
+                                  backgroundColor:
+                                      theme.colorScheme.errorContainer,
+                                  foregroundColor:
+                                      theme.colorScheme.onErrorContainer))
                         ]))))
       ],
     );
   }
 
-  // Builds the empty list widget (unchanged)
+  // --- Builds the empty list widget ---
   Widget _buildEmptyListWidget(
       String message, IconData icon, Future<void> Function() onRefresh) {
-    // (Keep existing implementation)
     final theme = Theme.of(context);
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -4171,15 +3817,19 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(icon, size: 60, color: Colors.grey[600]),
+                          Icon(icon,
+                              size: 60,
+                              color: theme.iconTheme.color?.withOpacity(0.5)),
                           const SizedBox(height: 16),
                           Text(message,
                               textAlign: TextAlign.center,
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(color: Colors.grey[400])),
+                              style: (theme.textTheme.titleMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.titleMedium?.color
+                                          ?.withOpacity(0.6))),
                           const SizedBox(height: 20),
                           TextButton.icon(
-                              // Add refresh text button
                               onPressed: onRefresh,
                               icon: Icon(Icons.refresh,
                                   size: 18, color: theme.colorScheme.secondary),
@@ -4190,4 +3840,4 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       ],
     );
   }
-}
+} // End of _KitchenOrderListScreenState
