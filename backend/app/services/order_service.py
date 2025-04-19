@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app import models, schemas
@@ -7,7 +8,14 @@ import redis
 from zoneinfo import ZoneInfo
 
 # Kết nối Redis để gửi thông báo đến queue
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+# redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+redis_client = redis.Redis(
+    host=os.getenv("REDISHOST"),
+    port=int(os.getenv("REDISPORT")),
+    password=os.getenv("REDISPASSWORD"),
+    decode_responses=True  # để trả về string thay vì bytes
+)
 
 def create_order_with_items(db: Session, order_data: schemas.OrderCreate):
     """
@@ -179,8 +187,15 @@ def calculate_total_amount(db: Session, session_id: int) -> float:
     """Tính tổng tiền dựa trên giá gói buffet và số người ăn"""
     session = db.query(models.TableSession).filter(models.TableSession.session_id == session_id).first()
     
-    if not session or session.package_id is None:
-        raise HTTPException(status_code=400, detail="Không tìm thấy phiên bàn hoặc không có gói buffet.")
+    # if not session or session.package_id is None:
+    #     raise HTTPException(status_code=400, detail="Không tìm thấy phiên bàn hoặc không có gói buffet.")
+    if not session:
+        raise HTTPException(status_code=400, detail="Không tìm thấy phiên bàn.")
+
+    if session.package_id is None:
+        # Có thể xử lý như bàn không ăn buffet → tổng tiền 0
+        return 0.0
+
 
     buffet_package = db.query(models.BuffetPackage).filter(models.BuffetPackage.package_id == session.package_id).first()
     

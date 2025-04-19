@@ -2,7 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.services import menu_service
+from app.services import menu_service, kitchen_service
 from app.schemas import MenuItemCreate, MenuItemUpdate, MenuItemResponse,BuffetPackageCreate, BuffetPackageUpdate, BuffetPackageResponse, PackageItemBase, TableStatus
 
 router = APIRouter(prefix="/menu", tags=["Menu"])
@@ -48,7 +48,7 @@ def delete_menu_item(item_id: int, db: Session = Depends(get_db)):
 # Cập nhật trạng thái món ăn
 @router.patch("/{item_id}/status")
 def update_menu_status(item_id: int, available: bool, db: Session = Depends(get_db)):
-    updated_item = menu_service.update_menu_item_status(db, item_id, available)
+    updated_item = kitchen_service.toggle_menu_item_availability(db, item_id, available)
     if not updated_item:
         raise HTTPException(status_code=404, detail="Món ăn không tồn tại")
     return {"message": "Cập nhật trạng thái món ăn thành công"}

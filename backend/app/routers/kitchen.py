@@ -13,8 +13,9 @@ router = APIRouter( prefix="/kitchen", tags=["Kitchen"])
 async def get_kitchen_orders(db: Session = Depends(get_db)):
     return kitchen_service.get_pending_orders(db)
 
-@router.put("/order-items/{order_item_id}/status", response_model=schemas.OrderItem)
-async def update_order_status(order_item_id: int, status: str, db: Session = Depends(get_db)):
+# Cập nhật trạng thái món ăn
+@router.patch("/order-items/{order_item_id}/status", response_model=schemas.OrderItem)
+def patch_order_item_status(order_item_id: int, status: str, db: Session = Depends(get_db)):
     return kitchen_service.update_order_status(db, order_item_id, status)
 
 @router.websocket("/ws")

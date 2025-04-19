@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:midterm/main.dart';
 
 import 'openTable.dart';
 
@@ -102,9 +103,12 @@ class _LoginScreenState extends State<LoginScreen> {
               backgroundColor: Colors.green[700],
             ),
           );
-
+          if( _selectedRole == "Nhân viên bếp")
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MenuScreen()));
+          else{
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TableSelectionScreen()));
+          }
           // Điều hướng nếu cần
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TableSelectionScreen()));
         } else {
           // Xử lý lỗi từ API
           final errorData = jsonDecode(response.body);
