@@ -114,6 +114,17 @@ class KitchenListOrder {
       // Initialize tableNumber as null, it will be fetched later
     );
   }
+
+  // Add equals and hashCode for Set operations
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KitchenListOrder &&
+          runtimeType == other.runtimeType &&
+          orderId == other.orderId;
+
+  @override
+  int get hashCode => orderId.hashCode;
 }
 
 class KitchenOrderDetailItem {
@@ -636,7 +647,7 @@ class _MenuScreenState extends State<MenuScreen> {
               content: Text(
                   'Đã cập nhật: ${item.name} (${newStatus ? "Có sẵn" : "Hết hàng"})'),
               duration: const Duration(seconds: 2),
-              backgroundColor: const Color.fromARGB(255, 18, 154, 88)));
+              backgroundColor: Colors.green[700]));
         }
         return true;
       } else {
@@ -842,13 +853,13 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     final bool smallScreen = _isSmallScreen(context);
-    final theme = Theme.of(context); // Get current theme
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: smallScreen ? _buildAppBar(theme) : null,
       drawer: smallScreen ? _buildAppDrawer(theme) : null,
       body: Container(
-        color: theme.scaffoldBackgroundColor, // Use theme's background
+        color: theme.scaffoldBackgroundColor,
         child: Stack(
           children: [
             Row(
@@ -856,17 +867,13 @@ class _MenuScreenState extends State<MenuScreen> {
                 if (!smallScreen) _buildNavigationRail(theme),
                 if (!smallScreen)
                   VerticalDivider(
-                      width: 1,
-                      thickness: 1,
-                      color: theme.dividerTheme.color), // Use theme color
+                      width: 1, thickness: 1, color: theme.dividerTheme.color),
                 Expanded(
                   child: Column(
                     children: [
                       if (!smallScreen) _buildLargeScreenHeader(theme),
                       if (!smallScreen)
-                        Container(
-                            height: 0.8,
-                            color: theme.dividerTheme.color), // Use theme color
+                        Container(height: 0.8, color: theme.dividerTheme.color),
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.zero,
@@ -890,20 +897,17 @@ class _MenuScreenState extends State<MenuScreen> {
   AppBar _buildAppBar(ThemeData theme) {
     return AppBar(
       title: const Text('WELCOME'),
-      actions: _buildAppBarActions(theme), // Pass theme
+      actions: _buildAppBarActions(theme),
     );
   }
 
   List<Widget> _buildAppBarActions(ThemeData theme) {
     return [
       IconButton(
-        // Theme toggle button
         icon: Icon(widget.currentThemeMode == ThemeMode.dark
             ? Icons.light_mode_outlined
             : Icons.dark_mode_outlined),
-        tooltip: widget.currentThemeMode == ThemeMode.dark
-            ? 'Chuyển sang Sáng'
-            : 'Chuyển sang Tối',
+        tooltip: widget.currentThemeMode == ThemeMode.dark ? 'Sáng' : 'Tối',
         onPressed: () {
           widget.onThemeChanged(
             widget.currentThemeMode == ThemeMode.light
@@ -911,7 +915,7 @@ class _MenuScreenState extends State<MenuScreen> {
                 : ThemeMode.light,
           );
         },
-        color: theme.appBarTheme.actionsIconTheme?.color, // Use theme color
+        color: theme.appBarTheme.actionsIconTheme?.color,
       ),
       IconButton(
         icon: const Icon(Icons.person_outline),
@@ -925,7 +929,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _buildLargeScreenHeader(ThemeData theme) {
     return Container(
-      color: theme.appBarTheme.backgroundColor, // Use theme color
+      color: theme.appBarTheme.backgroundColor,
       padding: const EdgeInsets.symmetric(
           horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
       child: Row(
@@ -933,8 +937,8 @@ class _MenuScreenState extends State<MenuScreen> {
           Expanded(
               child: Text('WELCOME',
                   textAlign: TextAlign.center,
-                  style: theme.appBarTheme.titleTextStyle)), // Use theme style
-          ..._buildAppBarActions(theme), // Pass theme here too
+                  style: theme.appBarTheme.titleTextStyle)),
+          ..._buildAppBarActions(theme),
         ],
       ),
     );
@@ -1086,21 +1090,9 @@ class _MenuScreenState extends State<MenuScreen> {
     );
     final int currentRailIndex = _getNavigationRailSelectedIndex();
     final destinationsData = [
-      {
-        'icon': Icons.table_restaurant_outlined,
-        'label': 'Danh sách bàn ăn',
-        'index': 0
-      },
-      {
-        'icon': Icons.receipt_long_outlined,
-        'label': 'Danh sách đơn hàng',
-        'index': 1
-      },
-      {
-        'icon': Icons.restaurant_menu_outlined,
-        'label': 'Danh sách món ăn',
-        'index': 2
-      },
+      {'icon': Icons.table_restaurant_outlined, 'label': 'Bàn ăn', 'index': 0},
+      {'icon': Icons.receipt_long_outlined, 'label': 'Đơn hàng', 'index': 1},
+      {'icon': Icons.restaurant_menu_outlined, 'label': 'Món ăn', 'index': 2},
     ];
     List<Widget> destinationsWidgets = [];
     for (int i = 0; i < destinationsData.length; i++) {
@@ -2055,10 +2047,10 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   String _searchQuery = "";
   List<KitchenListOrder> _filteredPendingOrders = [];
   List<KitchenListOrder> _filteredCompletedOrders = [];
+  bool _isHandlingWebSocketUpdate = false;
 
   @override
   bool get wantKeepAlive => true;
-
   @override
   void initState() {
     super.initState();
@@ -2236,14 +2228,146 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     });
   }
 
-  void _handleWebSocketMessage(dynamic message) {
-    print("WS: Handle msg -> Refresh pending.");
-    if (mounted) {
-      _fetchPendingOrders(forceRefresh: true);
+  // OPTIMIZED WebSocket Handler
+  // OPTIMIZED WebSocket Handler
+  void _handleWebSocketMessage(dynamic message) async {
+    print("WS: Handle msg -> Check for changes.");
+    if (_isHandlingWebSocketUpdate || !mounted)
+      return; // Prevent overlapping updates
+
+    setState(() {
+      _isHandlingWebSocketUpdate = true;
+    }); // Set flag
+
+    List<KitchenListOrder> inProgressFetched =
+        []; // <<<--- Define variable to hold fetched in-progress orders
+
+    try {
+      // 1. Fetch ONLY the current list of pending order IDs and statuses
+      print("WS Update: Fetching current pending orders status...");
+      List<KitchenListOrder> currentServerPending = [];
+      try {
+        final results = await Future.wait([
+          _fetchOrdersWithStatus('ordered'),
+          _fetchOrdersWithStatus('in_progress'), // Fetch both statuses
+        ], eagerError: true);
+        if (!mounted) return;
+        currentServerPending = [...results[0], ...results[1]];
+        inProgressFetched =
+            results[1]; // <<<--- Assign the fetched in-progress list here
+      } catch (e) {
+        print("WS Update: Error fetching orders during WS update: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Lỗi kiểm tra cập nhật đơn hàng.'),
+            backgroundColor: Colors.orangeAccent.withOpacity(0.8),
+            duration: Duration(seconds: 2),
+          ));
+        }
+        // Ensure flag is reset even on error
+        if (mounted)
+          setState(() {
+            _isHandlingWebSocketUpdate = false;
+          });
+        return; // Exit if we can't get the current server state
+      }
+
+      if (!mounted) return;
+
+      final serverOrderMap = <int, KitchenListOrder>{
+        for (var o in currentServerPending) o.orderId: o
+      };
+      final serverOrderIds = serverOrderMap.keys.toSet();
+      final localOrderIds = _pendingOrders.map((o) => o.orderId).toSet();
+
+      // 2. Identify changes
+      final newOrderIds = serverOrderIds.difference(localOrderIds);
+      final removedOrderIds = localOrderIds.difference(serverOrderIds);
+
+      bool changed = false;
+      List<KitchenListOrder> updatedPendingList = List.from(_pendingOrders);
+
+      // 3. Remove completed/cancelled orders
+      if (removedOrderIds.isNotEmpty) {
+        print("WS Update: Removing orders: $removedOrderIds");
+        updatedPendingList
+            .removeWhere((o) => removedOrderIds.contains(o.orderId));
+        final removedSessionIds = _pendingOrders
+            .where((o) => removedOrderIds.contains(o.orderId))
+            .map((o) => o.sessionId)
+            .toSet();
+        _tableNumberCache.removeWhere(
+            (sessionId, _) => removedSessionIds.contains(sessionId));
+        _fetchingTableSessionIds
+            .removeWhere((sessionId) => removedSessionIds.contains(sessionId));
+        _inProgressOrderIds.removeAll(removedOrderIds);
+        changed = true;
+      }
+
+      // 4. Add new orders (fetch details & table# only for these)
+      if (newOrderIds.isNotEmpty) {
+        print("WS Update: Adding new orders: $newOrderIds");
+        List<KitchenListOrder> newOrders = [];
+        for (int newId in newOrderIds) {
+          KitchenListOrder? newOrderData = serverOrderMap[newId];
+          if (newOrderData != null) {
+            newOrders.add(newOrderData);
+            // *** FIX: Use the correct variable 'inProgressFetched' ***
+            if (inProgressFetched
+                .any((ip) => ip.orderId == newOrderData.orderId)) {
+              print("WS Update: Marking new order $newId as in progress.");
+              _inProgressOrderIds.add(newId);
+            }
+          }
+        }
+        if (newOrders.isNotEmpty) {
+          print(
+              "WS Update: Fetching table numbers for ${newOrders.length} new orders...");
+          List<KitchenListOrder> newOrdersWithTables =
+              await _fetchTableNumbersForOrders(newOrders);
+          if (mounted) {
+            updatedPendingList.addAll(newOrdersWithTables);
+            changed = true;
+          }
+        }
+      }
+
+      // 5. Update state if changes occurred
+      if (changed && mounted) {
+        print("WS Update: Applying changes to state.");
+        updatedPendingList
+            .sort((a, b) => a.orderTime.compareTo(b.orderTime)); // Re-sort
+        _pendingOrders =
+            updatedPendingList; // Update notifier -> triggers listener -> updates filter & UI via setState
+
+        Map<int, int> counts = {};
+        for (var order in _pendingOrders) {
+          if (order.tableNumber != null &&
+              order.tableNumber! > 0 &&
+              order.tableNumber! != -1) {
+            counts[order.tableNumber!] = (counts[order.tableNumber!] ?? 0) + 1;
+          }
+        }
+        try {
+          widget.onOrderUpdate?.call(counts);
+        } catch (e) {
+          print("WS Update: Err call onOrderUpdate: $e");
+        }
+      } else {
+        print("WS Update: No changes detected.");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isHandlingWebSocketUpdate = false;
+        }); // Release flag
+      } else {
+        _isHandlingWebSocketUpdate = false;
+      }
     }
   }
 
-  // --- Data Fetching ---
+  // --- OPTIMIZED Data Fetching Methods ---
   Future<void> _fetchPendingOrders({bool forceRefresh = false}) async {
     if (_isLoadingPending && !forceRefresh) return;
     if (!mounted) return;
@@ -2263,6 +2387,8 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     List<KitchenListOrder> initialOrders = [];
     String? errorMsg;
     bool initialFetchSuccess = false;
+    List<KitchenListOrder> inProgressFetched =
+        []; // Keep track of in-progress orders fetched
     try {
       print("Kitchen: Fetching basic pending orders...");
       final r = await Future.wait([
@@ -2272,6 +2398,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       if (!mounted) return;
       final o = r[0];
       final i = r[1];
+      inProgressFetched = i;
       List<KitchenListOrder> c = [...o, ...i];
       final m = <int, KitchenListOrder>{
         for (var order in c) order.orderId: order
@@ -2293,19 +2420,18 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     }
 
     if (mounted) {
-      _pendingOrders =
-          initialOrders; // Updates notifier -> listener -> _updateFilteredLists
+      _pendingOrders = initialOrders;
       _pendingErrorMessage = errorMsg;
-      _isLoadingPending = false; // Stop initial shimmer
-      setState(() {}); // Rebuild with initial data (tables loading)
+      _isLoadingPending = false;
+      _updateFilteredLists();
+      setState(() {});
       print("Kitchen: Initial pending list rendered.");
     }
 
     if (mounted && initialFetchSuccess && initialOrders.isNotEmpty) {
-      print("Kitchen: Starting background table number fetch...");
-      // Use Future.delayed to ensure this runs after the current build cycle
-      Future.delayed(
-          Duration.zero, () => _fetchAndProcessTableNumbers(initialOrders));
+      print("Kitchen: Starting background table# fetch...");
+      Future.delayed(Duration.zero,
+          () => _fetchAndProcessTableNumbers(List.from(initialOrders)));
     } else {
       if (mounted) {
         setState(() {
@@ -2327,10 +2453,8 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
           "Kitchen: Starting background table# fetch for ${orders.length} orders.");
       await _fetchTableNumbersForOrders(orders);
       if (!mounted) return;
-
       Map<int, int> counts = {};
       for (var order in _pendingOrdersNotifier.value) {
-        // Use current notifier value
         if (order.tableNumber != null &&
             order.tableNumber! > 0 &&
             order.tableNumber! != -1) {
@@ -2338,20 +2462,18 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
         }
       }
       print("Kitchen: Background table# fetched. Updated counts: $counts");
-
       try {
         widget.onOrderUpdate?.call(counts);
       } catch (e) {
-        print("Kitchen: Err call onOrderUpdate post table fetch: $e");
+        print("Kitchen: Error calling onOrderUpdate after table fetch: $e");
       }
-
       if (mounted) {
         setState(() {
           _isBackgroundLoading = false;
-        }); // Stop indicator
+        });
       }
     } catch (e) {
-      print("Kitchen: Err during background table# fetch/update: $e");
+      print("Kitchen: Error during background table# fetch/update: $e");
       if (mounted) {
         setState(() {
           _isBackgroundLoading = false;
@@ -2391,7 +2513,6 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       print("Kitchen: Err fetch COMPLETED (basic): $e");
       initialOrders = [];
     }
-
     if (mounted) {
       _completedOrders = initialOrders;
       _completedErrorMessage = errorMsg;
@@ -2402,8 +2523,8 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       print("Kitchen: Initial completed list rendered.");
     }
     if (mounted && initialFetchSuccess && initialOrders.isNotEmpty) {
-      Future.delayed(
-          Duration.zero, () => _fetchAndProcessTableNumbers(initialOrders));
+      Future.delayed(Duration.zero,
+          () => _fetchAndProcessTableNumbers(List.from(initialOrders)));
     } else if (mounted) {
       setState(() {
         _isBackgroundLoading = false;
@@ -2469,12 +2590,10 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
         if (res != null && res > 0)
           cacheVal = res;
         else {
-          print("Warn: Invalid table# $sessionId data: $t");
           res = null;
           cacheVal = -1;
         }
       } else {
-        print("Err fetch table# $sessionId: ${r.statusCode} Body: ${r.body}");
         res = null;
         cacheVal = -1;
       }
@@ -2530,16 +2649,6 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   Future<void> _fetchOrderDetail(
       int orderId, StateSetter setDialogState) async {
     if (!mounted) return;
-    bool isDialogMounted = true;
-    try {
-      (context as Element).widget;
-    } catch (e) {
-      isDialogMounted = false;
-    }
-    if (!isDialogMounted) {
-      print("Detail fetch cancelled: Dialog unmounted $orderId.");
-      return;
-    }
     try {
       setDialogState(() {
         _isDetailLoading = true;
@@ -2560,16 +2669,6 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 8));
       if (!mounted) return;
-      isDialogMounted = true;
-      try {
-        (context as Element).widget;
-      } catch (e) {
-        isDialogMounted = false;
-      }
-      if (!isDialogMounted) {
-        print("Detail fetch cancelled post-API: Dialog unmounted $orderId.");
-        return;
-      }
       if (response.statusCode == 200) {
         final List<dynamic> d = jsonDecode(utf8.decode(response.bodyBytes));
         final List<KitchenOrderDetailItem> f = d
@@ -2595,9 +2694,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
           if (de is Map && de.containsKey('detail')) {
             s = ': ${de['detail']}';
           }
-        } catch (_) {
-          print("Server err body not JSON $orderId. Body: $b");
-        }
+        } catch (_) {}
         try {
           setDialogState(() {
             _detailErrorMessage = 'Lỗi tải chi tiết (${response.statusCode})$s';
@@ -2612,13 +2709,6 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     } on TimeoutException catch (e) {
       print("Timeout fetch detail $orderId: $e");
       if (!mounted) return;
-      isDialogMounted = true;
-      try {
-        (context as Element).widget;
-      } catch (e) {
-        isDialogMounted = false;
-      }
-      if (!isDialogMounted) return;
       try {
         setDialogState(() {
           _detailErrorMessage = 'Yêu cầu quá thời gian (8 giây).';
@@ -2632,13 +2722,6 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     } catch (e) {
       print("Net/Other Err fetch detail $orderId: $e");
       if (!mounted) return;
-      isDialogMounted = true;
-      try {
-        (context as Element).widget;
-      } catch (e) {
-        isDialogMounted = false;
-      }
-      if (!isDialogMounted) return;
       try {
         setDialogState(() {
           _detailErrorMessage = 'Lỗi kết nối/xử lý dữ liệu.';
@@ -2796,7 +2879,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                 return true;
               },
               child: AlertDialog(
-                title: Text('Đơn hàng Bàn $tableNumber (Đang chờ)',
+                title: Text('Đơn hàng Bàn $tableNumber (Chờ)',
                     style: theme.dialogTheme.titleTextStyle),
                 content: Container(
                   width: double.maxFinite,
@@ -3434,7 +3517,8 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildViewSwitcher(theme), const Spacer(), // Pushes search to right
+          _buildViewSwitcher(theme),
+          const Spacer(),
           SizedBox(
             width: 250,
             height: 40,
@@ -3523,7 +3607,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     );
   }
 
-  // --- Builds the main content area (list, shimmer, error, empty) ---
+  // --- Builds the main content area ---
   Widget _buildBodyContent(ThemeData theme) {
     Widget content;
     Future<void> Function() onRefresh;
@@ -3539,7 +3623,8 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       showEmpty = listToShow.isEmpty &&
           !showLoading &&
           errorMessage == null &&
-          !_isLoadingPending;
+          !_isLoadingPending &&
+          !_isBackgroundLoading;
     } else {
       onRefresh = () => _fetchCompletedOrders(forceRefresh: true);
       errorMessage = _completedErrorMessage;
@@ -3548,16 +3633,15 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       showEmpty = listToShow.isEmpty &&
           !showLoading &&
           errorMessage == null &&
-          !_isLoadingCompleted;
+          !_isLoadingCompleted &&
+          !_isBackgroundLoading;
     }
 
     if (showLoading) {
       content = _buildShimmerLoadingList(theme);
     } else if (errorMessage != null && listToShow.isEmpty) {
       content = _buildErrorWidget(errorMessage, onRefresh);
-    }
-    // Show empty message only if not loading (initial or background) and no error
-    else if (showEmpty && !_isBackgroundLoading) {
+    } else if (showEmpty && !_isBackgroundLoading) {
       String emptyMsg;
       IconData emptyIcon;
       if (_searchQuery.isNotEmpty) {
@@ -3573,7 +3657,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       content = _buildEmptyListWidget(emptyMsg, emptyIcon, onRefresh);
     } else {
       content = _buildOrderListView(listToShow);
-    } // Pass filtered list
+    }
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -3625,7 +3709,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   // --- Builds the actual list view for orders - USES listToShow ---
   Widget _buildOrderListView(List<KitchenListOrder> listToShow) {
     final theme = Theme.of(context);
-    if (listToShow.isEmpty) {
+    if (listToShow.isEmpty && !_isBackgroundLoading) {
       String emptyMsg;
       IconData emptyIcon;
       Future<void> Function() onRefresh;
