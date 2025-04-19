@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart'; // For groupBy
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
+import 'package:midterm/screens/management_screen.dart';
 import 'package:shimmer/shimmer.dart'; // Import Shimmer
 // import 'management_screen.dart'; // Assuming this exists
 
@@ -160,7 +161,12 @@ typedef TableClearedCallback = void Function(int tableNumber);
 typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
 void main() {
-  runApp(MyApp());
+  runApp(MaterialApp(
+    home: ManagementScreen(),
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData.dark(
+    ),
+  ));
 }
 
 // --- Stateful MyApp for Theme Management ---
@@ -1090,9 +1096,21 @@ class _MenuScreenState extends State<MenuScreen> {
     );
     final int currentRailIndex = _getNavigationRailSelectedIndex();
     final destinationsData = [
-      {'icon': Icons.table_restaurant_outlined, 'label': 'Bàn ăn', 'index': 0},
-      {'icon': Icons.receipt_long_outlined, 'label': 'Đơn hàng', 'index': 1},
-      {'icon': Icons.restaurant_menu_outlined, 'label': 'Món ăn', 'index': 2},
+      {
+        'icon': Icons.table_restaurant_outlined,
+        'label': 'Danh sách bàn ăn',
+        'index': 0
+      },
+      {
+        'icon': Icons.receipt_long_outlined,
+        'label': 'Danh sách đơn hàng',
+        'index': 1
+      },
+      {
+        'icon': Icons.restaurant_menu_outlined,
+        'label': 'Danh sách món ăn',
+        'index': 2
+      },
     ];
     List<Widget> destinationsWidgets = [];
     for (int i = 0; i < destinationsData.length; i++) {
