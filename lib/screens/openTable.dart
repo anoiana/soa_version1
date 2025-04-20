@@ -260,6 +260,142 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
     );
   }
 
+  Future<void> _showLogoutDialog(BuildContext context) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.6), // Làm nền mờ đậm hơn
+      builder: (BuildContext context) {
+        return TweenAnimationBuilder(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          builder: (context, scale, child) {
+            return Transform.scale(
+              scale: scale,
+              child: child,
+            );
+          },
+          child: AlertDialog(
+            backgroundColor: Colors.grey[900]!.withOpacity(0.95),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: BorderSide(color: Colors.orange[400]!.withOpacity(0.3), width: 1),
+            ),
+            elevation: 10,
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.logout,
+                  color: Colors.orange[400],
+                  size: 30,
+                  shadows: [
+                    Shadow(
+                      color: Colors.orange[400]!.withOpacity(0.5),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Xác nhận đăng xuất',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 22,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            content: Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng?',
+                style: GoogleFonts.poppins(
+                  color: Colors.white70,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsPadding: EdgeInsets.only(bottom: 16, top: 8),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Đóng dialog
+                },
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.red[600]!.withOpacity(0.5)),
+                  ),
+                ),
+                child: Text(
+                  'Hủy',
+                  style: GoogleFonts.poppins(
+                    color: Colors.red[600],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.orange[400]!.withOpacity(0.5),
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  foregroundColor: Colors.white,
+                ).copyWith(
+                  backgroundColor: MaterialStateProperty.all(Colors.transparent),
+                  overlayColor: MaterialStateProperty.all(Colors.orange[700]!.withOpacity(0.2)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context); // Đóng dialog
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                        (route) => false,
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.orange[400]!,
+                        Colors.orange[600]!,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'Đồng ý',
+                    style: GoogleFonts.poppins(
+                      color: Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showCodeDialog(BuildContext context, int tableNumber, int numberOfCustomers) async {
     TextEditingController codeController = TextEditingController();
 
@@ -478,11 +614,7 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
                         size: 28,
                       ),
                       onPressed: () {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (context) => LoginScreen()),
-                              (route) => false,
-                        );
+                        _showLogoutDialog(context);
                       },
                       tooltip: 'Đăng xuất',
                     ),

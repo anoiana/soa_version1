@@ -4,6 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:midterm/main.dart';
 import 'openTable.dart';
+typedef OrderUpdateCallback = void Function(Map<int, int> pendingOrderCountsByTable);
+typedef TableClearedCallback = void Function(int tableNumber);
+typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
+
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -11,6 +15,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  ThemeMode _themeMode = ThemeMode.dark; // Default to dark mode
+  void _changeTheme(ThemeMode themeMode) {
+    setState(() {
+      _themeMode = themeMode;
+    });
+  }
   // Controllers for password and email
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -73,7 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
           if (_selectedRole == "Nhân viên bếp") {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MenuScreen()));
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MenuScreen(
+              onThemeChanged: _changeTheme,
+              currentThemeMode: _themeMode,
+            ),));
           } else {
             Navigator.pushReplacement(
               context,

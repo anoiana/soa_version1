@@ -163,7 +163,7 @@ typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
 void main() {
   runApp(MaterialApp(
-    home: ManagementScreen(),
+    home: LoginScreen(),
     debugShowCheckedModeBanner: false,
     theme: ThemeData.dark(
     ),
