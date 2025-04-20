@@ -7,6 +7,7 @@ import 'package:midterm/screens/signInScreen.dart';
 import 'package:shimmer/shimmer.dart';
 import '../services/service.dart';
 import 'buffetScreen.dart';
+import 'management_screen.dart';
 
 // Placeholder cho màn hình thống kê
 class StatisticsScreen extends StatelessWidget {
@@ -359,7 +360,7 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
                   overlayColor: MaterialStateProperty.all(Colors.orange[700]!.withOpacity(0.2)),
                 ),
                 onPressed: () {
-                  Navigator.pop(context); // Đóng dialog
+                  Navigator.pop(context);
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => LoginScreen()),
@@ -581,7 +582,7 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => StatisticsScreen(),
+                              builder: (context) => MyApp(),
                             ),
                           );
                         },

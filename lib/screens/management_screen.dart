@@ -4,7 +4,9 @@ import 'dart:math' as math; // Để tạo dữ liệu giả
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:collection/collection.dart'; // Import for firstWhereOrNull
-import 'package:intl/intl.dart'; // Để định dạng ngày và tiền tệ
+import 'package:intl/intl.dart';
+
+import 'openTable.dart'; // Để định dạng ngày và tiền tệ
 // import 'package:data_table_2/data_table_2.dart'; // REMOVED DataTable2 - Still removed
 
 // --- Constants ---
@@ -403,14 +405,15 @@ class MyApp extends StatelessWidget {
           ),
           datePickerTheme: DatePickerThemeData(headerBackgroundColor: Colors.blueAccent.shade700, headerForegroundColor: Colors.white, backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: kCardElevation)),
       debugShowCheckedModeBanner: false,
-      home: ManagementScreen(),
+      home: ManagementScreen(role: "Quản lý"),
     );
   }
 }
 
 // --- Management Screen Widget ---
 class ManagementScreen extends StatefulWidget {
-  const ManagementScreen({Key? key}) : super(key: key);
+  final String role;
+  const ManagementScreen({Key? key, required this.role}) : super(key: key);
   @override
   State<ManagementScreen> createState() => _ManagementScreenState();
 }
@@ -1135,105 +1138,144 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     return Scaffold(
       appBar: AppBar(
-          leading: Builder(
-            builder: (context) => IconButton(
-              icon: Icon(Icons.menu_rounded, color: theme.iconTheme.color),
-              tooltip: 'Mở menu',
-              onPressed: () => Scaffold.of(context).openDrawer(),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu_rounded, color: theme.iconTheme.color),
+            tooltip: 'Mở menu',
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+        leadingWidth: 70,
+        title: Text('Quản Lý Bán Hàng', style: theme.appBarTheme.titleTextStyle),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications_none_outlined, size: 22),
+            tooltip: 'Thông báo',
+            onPressed: () {/* Handle notifications */},
+          ),
+          // Nút thoát
+          IconButton(
+            icon: Icon(Icons.exit_to_app, color: theme.iconTheme.color),
+            tooltip: 'Thoát',
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TableSelectionScreen(
+                    role: widget.role,
+                  ),
+                ),
+              ); // Quay lại trang trước
+            },
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: kPagePadding / 1.5)
+                .copyWith(right: kPagePadding),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Colors.grey.shade300,
+                  child: Icon(Icons.person_outline,
+                      color: Colors.grey.shade700, size: 20),
+                  radius: 16,
+                ),
+                SizedBox(width: 8),
+                if (MediaQuery.of(context).size.width > 600)
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Thu Ngân 1',
+                          style: theme.appBarTheme.titleTextStyle
+                              ?.copyWith(fontSize: 13)),
+                      Text('ID: 12345',
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(fontSize: 10.5)),
+                    ],
+                  ),
+              ],
             ),
           ),
-          leadingWidth: 70,
-          title:
-              Text('Quản Lý Bán Hàng', style: theme.appBarTheme.titleTextStyle),
-          actions: [
-            IconButton(
-                icon: Icon(Icons.notifications_none_outlined, size: 22),
-                tooltip: 'Thông báo',
-                onPressed: () {/* Handle notifications */}),
-            Padding(
-                padding: EdgeInsets.symmetric(horizontal: kPagePadding / 1.5)
-                    .copyWith(right: kPagePadding),
-                child: Row(children: [
-                  CircleAvatar(
-                      backgroundColor: Colors.grey.shade300,
-                      child: Icon(Icons.person_outline,
-                          color: Colors.grey.shade700, size: 20),
-                      radius: 16),
-                  SizedBox(width: 8),
-                  if (MediaQuery.of(context).size.width > 600)
-                    Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Thu Ngân 1',
-                              style: theme.appBarTheme.titleTextStyle
-                                  ?.copyWith(fontSize: 13)),
-                          Text('ID: 12345',
-                              style: theme.textTheme.labelSmall
-                                  ?.copyWith(fontSize: 10.5))
-                        ])
-                ]))
-          ]),
+        ],
+      ),
       drawer: Drawer(
-          child: ListView(padding: EdgeInsets.zero, children: <Widget>[
-        DrawerHeader(
-            decoration: BoxDecoration(color: theme.colorScheme.secondary),
-            child: Text('MENU QUẢN LÝ',
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: <Widget>[
+            DrawerHeader(
+              decoration: BoxDecoration(color: theme.colorScheme.secondary),
+              child: Text(
+                'MENU QUẢN LÝ',
                 style: theme.textTheme.titleLarge?.copyWith(
-                    color: theme.colorScheme.onSecondary, fontSize: 20))),
-        ListTile(
-            leading: Icon(Icons.schedule_rounded,
-                color:
-                    _currentViewIndex == 0 ? theme.colorScheme.secondary : null,
-                size: 20),
-            title: Text('Ca Trực Hiện Tại',
+                  color: theme.colorScheme.onSecondary,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.schedule_rounded,
+                color: _currentViewIndex == 0 ? theme.colorScheme.secondary : null,
+                size: 20,
+              ),
+              title: Text(
+                'Ca Trực Hiện Tại',
                 style: TextStyle(
-                    fontWeight: _currentViewIndex == 0
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    fontSize: 14)),
-            selected: _currentViewIndex == 0,
-            selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
-            onTap: () {
-              if (_currentViewIndex != 0) {
-                setState(() => _currentViewIndex = 0);
-              }
-              Navigator.pop(context);
-            }),
-        ListTile(
-            leading: Icon(Icons.history_rounded,
-                color:
-                    _currentViewIndex == 1 ? theme.colorScheme.secondary : null,
-                size: 20),
-            title: Text('Lịch Sử Bán Hàng',
+                  fontWeight:
+                  _currentViewIndex == 0 ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 14,
+                ),
+              ),
+              selected: _currentViewIndex == 0,
+              selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
+              onTap: () {
+                if (_currentViewIndex != 0) {
+                  setState(() => _currentViewIndex = 0);
+                }
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.history_rounded,
+                color: _currentViewIndex == 1 ? theme.colorScheme.secondary : null,
+                size: 20,
+              ),
+              title: Text(
+                'Lịch Sử Bán Hàng',
                 style: TextStyle(
-                    fontWeight: _currentViewIndex == 1
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    fontSize: 14)),
-            selected: _currentViewIndex == 1,
-            selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
-            onTap: () {
-              if (_currentViewIndex != 1) {
-                setState(() => _currentViewIndex = 1);
-                // Không cần fetch ở đây nữa vì đã fetch trong initState hoặc khi lọc
-              }
-              Navigator.pop(context);
-            }),
-        Divider(),
-        ListTile(
-            leading: Icon(Icons.dashboard_outlined, size: 20),
-            title: Text('Dashboard', style: TextStyle(fontSize: 14)),
-            onTap: () {
-              Navigator.pop(context);
-            }),
-        ListTile(
-            leading: Icon(Icons.settings_outlined, size: 20),
-            title: Text('Cài đặt', style: TextStyle(fontSize: 14)),
-            onTap: () {
-              Navigator.pop(context);
-            })
-      ])),
+                  fontWeight:
+                  _currentViewIndex == 1 ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 14,
+                ),
+              ),
+              selected: _currentViewIndex == 1,
+              selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
+              onTap: () {
+                if (_currentViewIndex != 1) {
+                  setState(() => _currentViewIndex = 1);
+                }
+                Navigator.pop(context);
+              },
+            ),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.dashboard_outlined, size: 20),
+              title: Text('Dashboard', style: TextStyle(fontSize: 14)),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.settings_outlined, size: 20),
+              title: Text('Cài đặt', style: TextStyle(fontSize: 14)),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
       body: Padding(
         padding: EdgeInsets.all(kPagePadding),
         child: Column(

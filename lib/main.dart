@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart'; // For groupBy
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
+import 'package:midterm/screens/signInScreen.dart';
 // import 'package:midterm/screens/management_screen.dart';
 import 'package:shimmer/shimmer.dart'; // Import Shimmer
 // import 'management_screen.dart'; // Assuming this exists
@@ -160,9 +161,9 @@ typedef OrderUpdateCallback = void Function(
 typedef TableClearedCallback = void Function(int tableNumber);
 typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
-// void main() {
-//   runApp(MyApp());
-// }
+void main() {
+  runApp(MyApp());
+}
 
 // --- Stateful MyApp for Theme Management ---
 class MyApp extends StatefulWidget {
@@ -171,7 +172,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.dark; // Default to dark mode
+  ThemeMode _themeMode = ThemeMode.dark;
 
   void _changeTheme(ThemeMode themeMode) {
     setState(() {
@@ -467,24 +468,13 @@ class _MyAppState extends State<MyApp> {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,
-      home: MenuScreen(
-        onThemeChanged: _changeTheme,
-        currentThemeMode: _themeMode,
-      ),
+      home: LoginScreen(),
     );
   }
 }
 
 // --- MODIFIED Menu Screen (Accepts Theme Callbacks) ---
 class MenuScreen extends StatefulWidget {
-  final ThemeChangeCallback onThemeChanged;
-  final ThemeMode currentThemeMode;
-
-  const MenuScreen({
-    Key? key,
-    required this.onThemeChanged,
-    required this.currentThemeMode,
-  }) : super(key: key);
 
   @override
   _MenuScreenState createState() => _MenuScreenState();
@@ -904,20 +894,6 @@ class _MenuScreenState extends State<MenuScreen> {
 
   List<Widget> _buildAppBarActions(ThemeData theme) {
     return [
-      IconButton(
-        icon: Icon(widget.currentThemeMode == ThemeMode.dark
-            ? Icons.light_mode_outlined
-            : Icons.dark_mode_outlined),
-        tooltip: widget.currentThemeMode == ThemeMode.dark ? 'Sáng' : 'Tối',
-        onPressed: () {
-          widget.onThemeChanged(
-            widget.currentThemeMode == ThemeMode.light
-                ? ThemeMode.dark
-                : ThemeMode.light,
-          );
-        },
-        color: theme.appBarTheme.actionsIconTheme?.color,
-      ),
       IconButton(
         icon: const Icon(Icons.person_outline),
         tooltip: 'Tài khoản',

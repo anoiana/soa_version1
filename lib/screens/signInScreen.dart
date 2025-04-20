@@ -12,15 +12,11 @@ typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
+
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  ThemeMode _themeMode = ThemeMode.dark; // Default to dark mode
-  void _changeTheme(ThemeMode themeMode) {
-    setState(() {
-      _themeMode = themeMode;
-    });
-  }
+
   // Controllers for password and email
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -35,6 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // Loading states
   bool _isLoading = false;
   bool _isResetLoading = false;
+
 
   // Handle login
   Future<void> _handleLogin() async {
@@ -62,6 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() {
+
       _isLoading = true;
     });
 
@@ -82,11 +80,16 @@ class _LoginScreenState extends State<LoginScreen> {
               backgroundColor: Colors.green[700],
             ),
           );
+
           if (_selectedRole == "Nhân viên bếp") {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MenuScreen(
-              onThemeChanged: _changeTheme,
-              currentThemeMode: _themeMode,
-            ),));
+
+            if (!mounted) return; // Kiểm tra context
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MenuScreen(),
+              ),
+            );
           } else {
             Navigator.pushReplacement(
               context,
