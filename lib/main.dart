@@ -7,6 +7,7 @@ import 'package:collection/collection.dart'; // For groupBy
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
 import 'package:midterm/screens/signInScreen.dart';
+import 'package:midterm/screens/management_screen.dart';
 import 'package:shimmer/shimmer.dart'; // Import Shimmer
 // import 'management_screen.dart'; // Assuming this exists
 
@@ -18,7 +19,7 @@ import 'package:web_socket_channel/status.dart' as status;
 const double kDefaultPadding = 8.0;
 const double kCardElevation = 4.0;
 const double kTableGridSpacing = 12.0;
-const double kTableItemHeight = 150.0;
+const double kTableItemHeight = 150.0; // Used for visibility calculation
 const int kTableGridCrossAxisCountLarge = 5;
 const int kTableGridCrossAxisCountSmall = 4;
 const int kMenuCategoryButtonCrossAxisCount = 2;
@@ -92,7 +93,7 @@ class KitchenListOrder {
   final int orderId;
   final int sessionId;
   final DateTime orderTime;
-  int? tableNumber;
+  int? tableNumber; // Nullable: null = loading, -1 = error, >0 = valid
   KitchenListOrder(
       {required this.orderId,
       required this.sessionId,
@@ -112,8 +113,20 @@ class KitchenListOrder {
       orderId: json['order_id'] as int? ?? 0,
       sessionId: json['session_id'] as int? ?? 0,
       orderTime: parsedTime,
+      // Initialize tableNumber as null, it will be fetched later
     );
   }
+
+  // Add equals and hashCode for Set operations
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KitchenListOrder &&
+          runtimeType == other.runtimeType &&
+          orderId == other.orderId;
+
+  @override
+  int get hashCode => orderId.hashCode;
 }
 
 class KitchenOrderDetailItem {
@@ -146,116 +159,339 @@ class KitchenOrderDetailItem {
 typedef OrderUpdateCallback = void Function(
     Map<int, int> pendingOrderCountsByTable);
 typedef TableClearedCallback = void Function(int tableNumber);
+typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
 void main() {
-  runApp(MyApp());
+  runApp(MaterialApp(
+    home: ManagementScreen(),
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData.dark(
+    ),
+  ));
 }
 
-class MyApp extends StatelessWidget {
+// --- Stateful MyApp for Theme Management ---
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.dark; // Default to dark mode
+
+  void _changeTheme(ThemeMode themeMode) {
+    setState(() {
+      _themeMode = themeMode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ThemeData appTheme = ThemeData(
+    // --- Define Base Theme Properties ---
+    final TextTheme baseTextTheme = TextTheme(
+      bodyMedium: GoogleFonts.lato(fontSize: 14),
+      titleMedium:
+          GoogleFonts.oswald(fontWeight: FontWeight.w600, fontSize: 16),
+      headlineSmall:
+          GoogleFonts.oswald(fontWeight: FontWeight.bold, fontSize: 22),
+      bodySmall: GoogleFonts.lato(fontSize: 11.5),
+      labelLarge: GoogleFonts.lato(fontWeight: FontWeight.bold),
+    );
+
+    final CardTheme baseCardTheme = CardTheme(
+      elevation: kCardElevation,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin:
+          const EdgeInsets.symmetric(vertical: 5, horizontal: kDefaultPadding),
+    );
+
+    final AppBarTheme baseAppBarTheme = AppBarTheme(
+      elevation: kCardElevation,
+      titleTextStyle: GoogleFonts.oswald(
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        shadows: const [
+          Shadow(blurRadius: 4.0, color: Colors.black45, offset: Offset(2, 2))
+        ],
+      ),
+      centerTitle: true,
+    );
+
+    final DialogTheme baseDialogTheme = DialogTheme(
+      titleTextStyle:
+          GoogleFonts.oswald(fontWeight: FontWeight.bold, fontSize: 19),
+      contentTextStyle: GoogleFonts.lato(fontSize: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    );
+
+    final ElevatedButtonThemeData baseElevatedButtonTheme =
+        ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: GoogleFonts.lato(fontWeight: FontWeight.bold),
+      ),
+    );
+
+    final SegmentedButtonThemeData baseSegmentedButtonTheme =
+        SegmentedButtonThemeData(
+      style: ButtonStyle(
+        side: MaterialStateProperty.all(const BorderSide(width: 0.5)),
+        shape: MaterialStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+      ),
+    );
+
+    // --- Define Dark Theme ---
+    final ThemeData darkTheme = ThemeData(
       brightness: Brightness.dark,
       primarySwatch: Colors.blueGrey,
       scaffoldBackgroundColor: const Color(0xFF263238),
       fontFamily: GoogleFonts.lato().fontFamily,
-      appBarTheme: AppBarTheme(
+      appBarTheme: baseAppBarTheme.copyWith(
         backgroundColor: const Color(0xFF37474F),
-        elevation: kCardElevation,
-        titleTextStyle: GoogleFonts.oswald(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          shadows: const [
-            Shadow(blurRadius: 4.0, color: Colors.black45, offset: Offset(2, 2))
-          ],
-        ),
+        foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
-        centerTitle: true,
+        actionsIconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: (baseAppBarTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.white),
       ),
-      cardTheme: CardTheme(
-        elevation: kCardElevation,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      cardTheme: baseCardTheme.copyWith(
         color: const Color(0xFF455A64),
-        margin: const EdgeInsets.symmetric(
-            vertical: 5, horizontal: kDefaultPadding),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: baseDialogTheme.copyWith(
         backgroundColor: const Color(0xFF37474F).withOpacity(0.95),
-        titleTextStyle: GoogleFonts.oswald(
-            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 19),
-        contentTextStyle: GoogleFonts.lato(color: Colors.white70, fontSize: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titleTextStyle: (baseDialogTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.white),
+        contentTextStyle:
+            (baseDialogTheme.contentTextStyle ?? const TextStyle())
+                .copyWith(color: Colors.white70),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: Colors.teal,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          textStyle: GoogleFonts.lato(fontWeight: FontWeight.bold),
-        ),
-      ),
+          style:
+              (baseElevatedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        foregroundColor: MaterialStateProperty.all(Colors.white),
+        backgroundColor: MaterialStateProperty.all(Colors.teal),
+      )),
       switchTheme: SwitchThemeData(
         thumbColor: MaterialStateProperty.resolveWith<Color>((states) {
-          if (states.contains(MaterialState.disabled)) return Colors.grey;
+          if (states.contains(MaterialState.disabled)) return Colors.grey[700]!;
           return states.contains(MaterialState.selected)
-              ? Colors.greenAccent
-              : Colors.redAccent;
+              ? Colors.greenAccent[100]!
+              : Colors.redAccent[100]!;
         }),
         trackColor: MaterialStateProperty.resolveWith<Color>((states) {
           if (states.contains(MaterialState.disabled))
-            return Colors.grey.withOpacity(0.3);
-          return (states.contains(MaterialState.selected)
-                  ? Colors.greenAccent
-                  : Colors.redAccent)
-              .withOpacity(0.5);
+            return Colors.grey[800]!.withOpacity(0.5);
+          Color baseColor = states.contains(MaterialState.selected)
+              ? Colors.greenAccent[100]!
+              : Colors.redAccent[100]!;
+          return baseColor.withOpacity(0.4);
         }),
       ),
       iconTheme: const IconThemeData(color: Colors.white70),
-      textTheme: TextTheme(
-        bodyMedium: GoogleFonts.lato(
-            color: Colors.white.withOpacity(0.85), fontSize: 14),
-        titleMedium: GoogleFonts.oswald(
-            color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
-        headlineSmall: GoogleFonts.oswald(
-            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
-        bodySmall: GoogleFonts.lato(color: Colors.grey[400], fontSize: 11.5),
-        labelLarge: GoogleFonts.lato(fontWeight: FontWeight.bold),
-      ),
+      textTheme: baseTextTheme.apply(
+          bodyColor: Colors.white.withOpacity(0.85),
+          displayColor: Colors.white,
+          decorationColor: Colors.white70),
       dividerTheme: const DividerThemeData(
           color: Colors.white24, thickness: 0.8, space: 1),
+      shadowColor: Colors.black.withOpacity(0.5),
       colorScheme: ColorScheme.fromSwatch(
         primarySwatch: Colors.blueGrey,
         brightness: Brightness.dark,
-      ).copyWith(secondary: Colors.cyanAccent, error: Colors.redAccent[100]),
+      ).copyWith(
+        secondary: Colors.cyanAccent,
+        error: Colors.redAccent[100]!,
+        onSurface: Colors.white,
+        onBackground: Colors.white,
+        onError: Colors.black,
+        surface: const Color(0xFF37474F),
+        background: const Color(0xFF263238),
+        errorContainer: Colors.redAccent[100]?.withOpacity(0.2) ??
+            Colors.red.withOpacity(0.2),
+        onErrorContainer: Colors.redAccent[100] ?? Colors.red,
+      ),
       primaryColorLight: Colors.cyanAccent[100],
-      segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.resolveWith<Color?>((states) {
-            if (states.contains(MaterialState.selected))
-              return Colors.blueGrey[700];
-            return const Color(0xFF37474F);
-          }),
-          side: MaterialStateProperty.all(
-              const BorderSide(color: Colors.white30, width: 0.5)),
-          shape: MaterialStateProperty.all(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+      segmentedButtonTheme: baseSegmentedButtonTheme.copyWith(
+          style:
+              (baseSegmentedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected))
+            return Colors.blueGrey[700]!;
+          return const Color(0xFF37474F);
+        }),
+        side: MaterialStateProperty.all(
+            const BorderSide(color: Colors.white30, width: 0.5)),
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) return Colors.white;
+          return Colors.white70;
+        }),
+      )),
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: GoogleFonts.lato(color: Colors.grey[500], fontSize: 13),
+        prefixIconColor: Colors.grey[500],
+        suffixIconColor: Colors.grey[500],
+        filled: true,
+        fillColor: const Color(0xFF455A64).withOpacity(0.5),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.2), width: 0.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.2), width: 0.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.cyanAccent.withOpacity(0.7), width: 1.0),
         ),
       ),
+      disabledColor: Colors.grey[600],
     );
+
+    // --- Define Light Theme ---
+    final ThemeData lightTheme = ThemeData(
+      brightness: Brightness.light,
+      primarySwatch: Colors.blueGrey,
+      scaffoldBackgroundColor: Colors.grey[100]!,
+      fontFamily: GoogleFonts.lato().fontFamily,
+      appBarTheme: baseAppBarTheme.copyWith(
+        backgroundColor: Colors.blueGrey[700],
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: (baseAppBarTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.white),
+      ),
+      cardTheme: baseCardTheme.copyWith(
+        color: Colors.white,
+      ),
+      dialogTheme: baseDialogTheme.copyWith(
+        backgroundColor: Colors.white.withOpacity(0.98),
+        titleTextStyle: (baseDialogTheme.titleTextStyle ?? const TextStyle())
+            .copyWith(color: Colors.black87),
+        contentTextStyle:
+            (baseDialogTheme.contentTextStyle ?? const TextStyle())
+                .copyWith(color: Colors.black54),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+          style:
+              (baseElevatedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        foregroundColor: MaterialStateProperty.all(Colors.white),
+        backgroundColor: MaterialStateProperty.all(Colors.blueGrey[600]),
+      )),
+      switchTheme: SwitchThemeData(
+        thumbColor: MaterialStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return Colors.grey.shade400;
+          }
+          if (states.contains(MaterialState.selected)) {
+            return Colors.blueGrey[600];
+          }
+          return Colors.grey.shade400;
+        }),
+        trackColor: MaterialStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return Colors.grey.shade400.withOpacity(0.5);
+          }
+          if (states.contains(MaterialState.selected)) {
+            return Colors.blueGrey[600]?.withOpacity(0.5);
+          }
+          return Colors.grey.shade400.withOpacity(0.5);
+        }),
+      ),
+      iconTheme: IconThemeData(color: Colors.grey[700]),
+      textTheme: baseTextTheme.apply(
+          bodyColor: Colors.black87,
+          displayColor: Colors.black,
+          decorationColor: Colors.black54),
+      dividerTheme:
+          DividerThemeData(color: Colors.grey[400]!, thickness: 0.8, space: 1),
+      shadowColor: Colors.black.withOpacity(0.2),
+      colorScheme: ColorScheme.fromSwatch(
+        primarySwatch: Colors.blueGrey,
+        brightness: Brightness.light,
+      ).copyWith(
+        secondary: Colors.teal,
+        error: Colors.red[700]!,
+        onSurface: Colors.black87,
+        onBackground: Colors.black87,
+        onError: Colors.white,
+        surface: Colors.white,
+        background: Colors.grey[100]!,
+        errorContainer: Colors.red[100]!,
+        onErrorContainer: Colors.red[900]!,
+      ),
+      primaryColorLight: Colors.teal[100],
+      segmentedButtonTheme: baseSegmentedButtonTheme.copyWith(
+          style:
+              (baseSegmentedButtonTheme.style ?? const ButtonStyle()).copyWith(
+        backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected))
+            return Colors.blueGrey[100]!;
+          return Colors.white;
+        }),
+        side: MaterialStateProperty.all(
+            BorderSide(color: Colors.grey[400]!, width: 0.5)),
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected))
+            return Colors.blueGrey[800]!;
+          return Colors.grey[700]!;
+        }),
+      )),
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: GoogleFonts.lato(color: Colors.grey[500], fontSize: 13),
+        prefixIconColor: Colors.grey[500],
+        suffixIconColor: Colors.grey[500],
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: Colors.grey[400]!, width: 0.8),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: Colors.grey[400]!, width: 0.8),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide:
+              BorderSide(color: Colors.teal.withOpacity(0.8), width: 1.2),
+        ),
+      ),
+      disabledColor: Colors.grey[400],
+    );
+
+    // --- Build MaterialApp ---
     return MaterialApp(
       title: 'Restaurant App',
       debugShowCheckedModeBanner: false,
-      theme: appTheme,
-      home: LoginScreen(),
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: _themeMode,
+      home: MenuScreen(
+        onThemeChanged: _changeTheme,
+        currentThemeMode: _themeMode,
+      ),
     );
   }
 }
 
-// --- Menu Screen ---
+// --- MODIFIED Menu Screen (Accepts Theme Callbacks) ---
 class MenuScreen extends StatefulWidget {
+  final ThemeChangeCallback onThemeChanged;
+  final ThemeMode currentThemeMode;
+
+  const MenuScreen({
+    Key? key,
+    required this.onThemeChanged,
+    required this.currentThemeMode,
+  }) : super(key: key);
+
   @override
   _MenuScreenState createState() => _MenuScreenState();
 }
@@ -278,6 +514,9 @@ class _MenuScreenState extends State<MenuScreen> {
   int get orderScreenIndex => _categories.isEmpty ? 1 : _categories.length + 1;
   Map<int, int> _pendingOrderCountsByTable = {};
   int? _hoveredTableIndex;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   @override
   void initState() {
     super.initState();
@@ -291,11 +530,10 @@ class _MenuScreenState extends State<MenuScreen> {
       },
     );
     _tableScrollController.addListener(_onTableScroll);
+    _searchController.addListener(_onSearchChanged);
     _fetchMenuData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _onTableScroll();
-      }
+      if (mounted) _onTableScroll();
     });
   }
 
@@ -304,9 +542,37 @@ class _MenuScreenState extends State<MenuScreen> {
     _tableScrollController.removeListener(_onTableScroll);
     _tableScrollController.dispose();
     _menuScrollController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     super.dispose();
   }
 
+  // --- Search Listener and Clear Method ---
+  void _onSearchChanged() {
+    if (mounted && _searchQuery != _searchController.text) {
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
+    } else if (!mounted) {
+      _searchQuery = _searchController.text;
+    }
+  }
+
+  void _clearSearch() {
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    } else if (_searchQuery.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _searchQuery = "";
+        });
+      } else {
+        _searchQuery = "";
+      }
+    }
+  }
+
+  // --- Data Fetching and State Update Methods ---
   Future<void> _fetchMenuData() async {
     if (!mounted) return;
     setState(() {
@@ -315,44 +581,36 @@ class _MenuScreenState extends State<MenuScreen> {
     });
     final url = Uri.parse('https://soa-deploy.up.railway.app/menu/');
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final r = await http.get(url).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      if (response.statusCode == 200) {
-        final List<dynamic> decodedData =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        final List<MenuItem> allItems = decodedData
-            .map((jsonItem) =>
-                MenuItem.fromJson(jsonItem as Map<String, dynamic>))
-            .toList();
-        final validItems =
-            allItems.where((item) => item.category.isNotEmpty).toList();
-        final groupedItems =
-            groupBy(validItems, (MenuItem item) => item.category);
-        final uniqueCategories = groupedItems.keys.toList()..sort();
-        final newCategoryKeys =
-            List.generate(uniqueCategories.length, (_) => GlobalKey());
-        final Map<int, MenuItem> itemsById = {
-          for (var item in validItems) item.itemId: item
-        };
+      if (r.statusCode == 200) {
+        final List<dynamic> d = jsonDecode(utf8.decode(r.bodyBytes));
+        final List<MenuItem> items =
+            d.map((i) => MenuItem.fromJson(i as Map<String, dynamic>)).toList();
+        final valid = items.where((i) => i.category.isNotEmpty).toList();
+        final grouped = groupBy(valid, (MenuItem i) => i.category);
+        final uniqueCats = grouped.keys.toList()..sort();
+        final keys = List.generate(uniqueCats.length, (_) => GlobalKey());
+        final byId = {for (var i in valid) i.itemId: i};
         setState(() {
-          _categories = uniqueCategories;
-          _menuItemsByCategory = groupedItems;
-          _menuItemsById = itemsById;
-          _categoryKeys = newCategoryKeys;
+          _categories = uniqueCats;
+          _menuItemsByCategory = grouped;
+          _menuItemsById = byId;
+          _categoryKeys = keys;
           _isLoadingMenu = false;
         });
       } else {
         if (!mounted) return;
         setState(() {
-          _menuErrorMessage = 'Lỗi tải menu (${response.statusCode})';
+          _menuErrorMessage = 'Lỗi tải menu (${r.statusCode})';
           _isLoadingMenu = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
-      print("Error fetching menu data: $e");
+      print("Error fetch menu: $e");
       setState(() {
-        _menuErrorMessage = 'Không thể tải menu. Kiểm tra kết nối.';
+        _menuErrorMessage = 'Không thể tải menu.';
         _isLoadingMenu = false;
       });
     }
@@ -362,52 +620,34 @@ class _MenuScreenState extends State<MenuScreen> {
     if (!mounted) return false;
     final String itemId = item.itemId.toString();
     if (item.itemId <= 0) {
-      print("Error: Invalid item ID (${item.itemId}) for update.");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Lỗi: ID món ăn không hợp lệ.'),
-            backgroundColor: Colors.redAccent));
-      }
       return false;
     }
     final url =
         Uri.parse('https://soa-deploy.up.railway.app/menu/$itemId/status')
             .replace(queryParameters: {'available': newStatus.toString()});
-    final headers = {'Content-Type': 'application/json'};
-    print('Calling API: PATCH ${url.toString()}');
+    final h = {'Content-Type': 'application/json'};
+    print('PATCH ${url.toString()}');
     try {
-      final response = await http
-          .patch(url, headers: headers)
+      final r = await http
+          .patch(url, headers: h)
           .timeout(const Duration(seconds: 10));
       if (!mounted) return false;
-      print('API Response Status Code: ${response.statusCode}');
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        print('API update successful for item ${item.itemId}');
-        final updatedItem = item.copyWith(available: newStatus);
-        final category = updatedItem.category;
-        if (_menuItemsByCategory.containsKey(category)) {
+      print('API Resp: ${r.statusCode}');
+      if (r.statusCode == 200 || r.statusCode == 204) {
+        print('API OK item ${item.itemId}');
+        final u = item.copyWith(available: newStatus);
+        final cat = u.category;
+        if (_menuItemsByCategory.containsKey(cat)) {
           setState(() {
-            final categoryList = _menuItemsByCategory[category]!;
-            final itemIndex =
-                categoryList.indexWhere((i) => i.itemId == item.itemId);
-            if (itemIndex != -1) {
-              categoryList[itemIndex] = updatedItem;
-              print("Updated item in category '$category'");
-            } else {
-              print(
-                  "Warning: Item ${item.itemId} not found in category '$category' list during update.");
+            final list = _menuItemsByCategory[cat]!;
+            final idx = list.indexWhere((i) => i.itemId == item.itemId);
+            if (idx != -1) {
+              list[idx] = u;
             }
             if (_menuItemsById.containsKey(item.itemId)) {
-              _menuItemsById[item.itemId] = updatedItem;
-              print("Updated item in ID map");
-            } else {
-              print(
-                  "Warning: Item ${item.itemId} not found in ID map during update.");
+              _menuItemsById[item.itemId] = u;
             }
           });
-        } else {
-          print(
-              "Warning: Category '$category' not found for item ${item.itemId} during update.");
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -418,22 +658,18 @@ class _MenuScreenState extends State<MenuScreen> {
         }
         return true;
       } else {
-        print(
-            'API update failed for item ${item.itemId}. Status: ${response.statusCode}, Body: ${response.body}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                  'Lỗi cập nhật trạng thái món ăn. Server: ${response.statusCode}'),
+              content: Text('Lỗi cập nhật món. Server: ${r.statusCode}'),
               backgroundColor: Colors.redAccent));
         }
         return false;
       }
     } catch (e) {
       if (!mounted) return false;
-      print('Error calling update API for item ${item.itemId}: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Lỗi mạng hoặc timeout khi cập nhật.'),
+            content: Text('Lỗi mạng/timeout cập nhật.'),
             backgroundColor: Colors.orangeAccent));
       }
       return false;
@@ -444,22 +680,20 @@ class _MenuScreenState extends State<MenuScreen> {
     if (!mounted ||
         !_tableScrollController.hasClients ||
         !_tableScrollController.position.hasContentDimensions) return;
-    final double scrollOffset = _tableScrollController.offset;
-    final double maxScroll = _tableScrollController.position.maxScrollExtent;
-    final double viewportHeight =
-        _tableScrollController.position.viewportDimension;
-    bool shouldShow =
-        maxScroll > 0 && (scrollOffset + viewportHeight < maxScroll - 20);
-    double targetAngle = shouldShow
+    final o = _tableScrollController.offset;
+    final m = _tableScrollController.position.maxScrollExtent;
+    final v = _tableScrollController.position.viewportDimension;
+    bool show = m > 0 && (o + v < m - 20);
+    double angle = show
         ? (math.pi / 12) *
             math.sin(DateTime.now().millisecondsSinceEpoch / 300.0)
         : 0.0;
-    if (_showExclamationMark != shouldShow ||
+    if (_showExclamationMark != show ||
         (_showExclamationMark &&
-            (_exclamationMarkAngle - targetAngle).abs() > 0.01)) {
+            (_exclamationMarkAngle - angle).abs() > 0.01)) {
       setState(() {
-        _showExclamationMark = shouldShow;
-        _exclamationMarkAngle = targetAngle;
+        _showExclamationMark = show;
+        _exclamationMarkAngle = angle;
       });
     }
   }
@@ -468,22 +702,19 @@ class _MenuScreenState extends State<MenuScreen> {
     if (!mounted ||
         !_tableScrollController.hasClients ||
         !_tableScrollController.position.hasContentDimensions) return;
-    final double scrollOffset = _tableScrollController.offset;
-    final double viewportHeight =
-        _tableScrollController.position.viewportDimension;
-    final int crossAxisCount = _getCrossAxisCount(context);
-    final double totalItemHeight = kTableItemHeight + kTableGridSpacing;
-    int firstVisibleRow = (scrollOffset / totalItemHeight).floor();
-    int lastVisibleRow =
-        ((scrollOffset + viewportHeight - 1) / totalItemHeight).floor();
-    int firstVisibleIndex = math.max(0, firstVisibleRow * crossAxisCount);
-    int lastVisibleIndex =
-        math.min(tables.length - 1, (lastVisibleRow + 1) * crossAxisCount - 1);
+    final o = _tableScrollController.offset;
+    final v = _tableScrollController.position.viewportDimension;
+    final c = _getCrossAxisCount(context);
+    final h = kTableItemHeight + kTableGridSpacing;
+    int r1 = (o / h).floor();
+    int r2 = ((o + v - 1) / h).floor();
+    int i1 = math.max(0, r1 * c);
+    int i2 = math.min(tables.length - 1, (r2 + 1) * c - 1);
     bool changed = false;
     for (int i = 0; i < tables.length; i++) {
-      bool currentlyVisible = (i >= firstVisibleIndex && i <= lastVisibleIndex);
-      if ((tables[i]['isVisible'] as bool? ?? false) != currentlyVisible) {
-        tables[i]['isVisible'] = currentlyVisible;
+      bool vis = (i >= i1 && i <= i2);
+      if ((tables[i]['isVisible'] as bool? ?? false) != vis) {
+        tables[i]['isVisible'] = vis;
         changed = true;
       }
     }
@@ -493,26 +724,18 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _scrollToCategory(int categoryIndex) {
-    if (categoryIndex < 1 || categoryIndex > _categories.length) {
-      print("Error: Invalid category index $categoryIndex requested.");
-      return;
-    }
+    if (categoryIndex < 1 || categoryIndex > _categories.length) return;
     int arrayIndex = categoryIndex - 1;
-    if (arrayIndex >= _categoryKeys.length) {
-      print(
-          "Error: Category key not found for index $arrayIndex. Keys length: ${_categoryKeys.length}");
-      return;
-    }
+    if (arrayIndex >= _categoryKeys.length) return;
     bool needsViewChange = selectedIndex != categoryIndex;
     if (needsViewChange) {
+      _clearSearch();
       setState(() {
         selectedIndex = categoryIndex;
         _isMenuCategoriesExpanded = true;
       });
       Future.delayed(const Duration(milliseconds: 150), () {
-        if (mounted) {
-          _performScroll(arrayIndex);
-        }
+        if (mounted) _performScroll(arrayIndex);
       });
     } else {
       _performScroll(arrayIndex);
@@ -523,57 +746,39 @@ class _MenuScreenState extends State<MenuScreen> {
     if (!mounted || arrayIndex < 0 || arrayIndex >= _categoryKeys.length)
       return;
     final key = _categoryKeys[arrayIndex];
-    final context = key.currentContext;
-    if (context != null) {
-      bool isViewingAnyCategory =
-          selectedIndex >= 1 && selectedIndex <= _categories.length;
-      if (isViewingAnyCategory) {
+    final ctx = key.currentContext;
+    if (ctx != null) {
+      bool isMenu = selectedIndex >= 1 && selectedIndex <= _categories.length;
+      if (isMenu) {
         if (_menuScrollController.hasClients &&
             _menuScrollController.position.hasContentDimensions) {
-          print("Scrolling to category index: $arrayIndex");
-          Scrollable.ensureVisible(context,
+          Scrollable.ensureVisible(ctx,
               duration: const Duration(milliseconds: 500),
               curve: Curves.easeInOut,
               alignment: 0.0);
         } else {
-          print("Scroll controller not ready, scheduling post-frame scroll.");
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _menuScrollController.hasClients) {
-              print(
-                  "Executing post-frame scroll to category index: $arrayIndex");
-              Scrollable.ensureVisible(context,
+            if (mounted && _menuScrollController.hasClients)
+              Scrollable.ensureVisible(ctx,
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.ease);
-            } else if (mounted) {
-              print(
-                  "Post-frame scroll attempt failed: Controller still not ready.");
-            }
           });
         }
-      } else {
-        print(
-            "Scroll attempt ignored: Not currently viewing a menu category list.");
       }
     } else {
-      print(
-          "Scroll Failed: Context is null for category key index $arrayIndex.");
+      print("Scroll Fail: Ctx null $arrayIndex.");
     }
   }
 
   void _showOrderPopup(BuildContext context, int tableIndex) {
-    final int targetTableNumber = tableIndex + 1;
+    final int targetNum = tableIndex + 1;
     final kitchenState = _kitchenListKey.currentState;
     if (kitchenState != null) {
-      print(
-          "Requesting kitchen state to show orders for table $targetTableNumber");
-      kitchenState.showOrdersForTable(context, targetTableNumber);
+      kitchenState.showOrdersForTable(context, targetNum);
     } else {
-      print(
-          "Error: KitchenOrderListScreen state not available yet for table $targetTableNumber.");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Đang tải danh sách đơn hàng, vui lòng thử lại sau giây lát.'),
+          content: Text('Đang tải DS đơn...'),
           backgroundColor: Colors.orangeAccent,
           duration: Duration(seconds: 3),
         ),
@@ -584,9 +789,8 @@ class _MenuScreenState extends State<MenuScreen> {
   int _getNavigationRailSelectedIndex() {
     if (selectedIndex == 0) return 0;
     if (selectedIndex == orderScreenIndex) return 1;
-    bool isAnyCategorySelected =
-        selectedIndex >= 1 && selectedIndex <= _categories.length;
-    if (isAnyCategorySelected || _isMenuCategoriesExpanded) return 2;
+    bool isCatSel = selectedIndex >= 1 && selectedIndex <= _categories.length;
+    if (isCatSel || _isMenuCategoriesExpanded) return 2;
     return 0;
   }
 
@@ -605,47 +809,41 @@ class _MenuScreenState extends State<MenuScreen> {
     bool changed = false;
     _pendingOrderCountsByTable = Map.from(newCounts);
     for (int i = 0; i < tables.length; i++) {
-      int tableNum = i + 1;
-      int newCount = newCounts[tableNum] ?? 0;
-      int currentTablePendingCount =
-          tables[i]['pendingOrderCount'] as int? ?? 0;
-      if (currentTablePendingCount != newCount) {
-        tables[i]['pendingOrderCount'] = newCount;
+      int num = i + 1;
+      int count = newCounts[num] ?? 0;
+      int current = tables[i]['pendingOrderCount'] as int? ?? 0;
+      if (current != count) {
+        tables[i]['pendingOrderCount'] = count;
         changed = true;
       }
     }
     if (changed) {
-      print(
-          "Updating table counts from Kitchen (via general update): $newCounts");
+      print("Update table counts: $newCounts");
       setState(() {});
     }
   }
 
   void _handleTableCleared(int tableNumber) {
     if (!mounted) return;
-    print("Received table cleared signal for table: $tableNumber");
-    int tableIndex = tableNumber - 1;
-    if (tableIndex >= 0 && tableIndex < tables.length) {
-      if ((tables[tableIndex]['pendingOrderCount'] as int? ?? 0) > 0) {
+    print("Table cleared: $tableNumber");
+    int idx = tableNumber - 1;
+    if (idx >= 0 && idx < tables.length) {
+      if ((tables[idx]['pendingOrderCount'] as int? ?? 0) > 0) {
         setState(() {
-          tables[tableIndex]['pendingOrderCount'] = 0;
+          tables[idx]['pendingOrderCount'] = 0;
           _pendingOrderCountsByTable[tableNumber] = 0;
         });
-        print(
-            "Set pending order count to 0 for table $tableNumber in MenuScreen.");
+        print("Set pending 0 $tableNumber");
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
+          if (mounted)
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('Tất cả đơn chờ cho Bàn $tableNumber đã hoàn thành!'),
+              content: Text('Đơn Bàn $tableNumber hoàn thành!'),
               backgroundColor: Colors.lightGreen[700],
               duration: const Duration(seconds: 3),
             ));
-          }
         });
       } else {
-        print(
-            "Table $tableNumber already had 0 pending orders in MenuScreen state. Ignoring redundant clear signal.");
+        print("Table $tableNumber already 0.");
         if (_pendingOrderCountsByTable[tableNumber] != 0) {
           setState(() {
             _pendingOrderCountsByTable[tableNumber] = 0;
@@ -653,48 +851,36 @@ class _MenuScreenState extends State<MenuScreen> {
         }
       }
     } else {
-      print(
-          "Warning: Received cleared signal for invalid table number: $tableNumber");
+      print("Warn: Invalid table# cleared: $tableNumber");
     }
   }
+
+  // --- Build Methods ---
 
   @override
   Widget build(BuildContext context) {
     final bool smallScreen = _isSmallScreen(context);
     final theme = Theme.of(context);
+
     return Scaffold(
       appBar: smallScreen ? _buildAppBar(theme) : null,
       drawer: smallScreen ? _buildAppDrawer(theme) : null,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              theme.scaffoldBackgroundColor,
-              theme.scaffoldBackgroundColor
-                  .withBlue(theme.scaffoldBackgroundColor.blue + 5)
-                  .withGreen(theme.scaffoldBackgroundColor.green + 2),
-            ],
-            stops: const [0.3, 1.0],
-          ),
-        ),
+        color: theme.scaffoldBackgroundColor,
         child: Stack(
           children: [
             Row(
               children: [
                 if (!smallScreen) _buildNavigationRail(theme),
                 if (!smallScreen)
-                  const VerticalDivider(
-                      width: 1, thickness: 1, color: Colors.white12),
+                  VerticalDivider(
+                      width: 1, thickness: 1, color: theme.dividerTheme.color),
                 Expanded(
                   child: Column(
                     children: [
                       if (!smallScreen) _buildLargeScreenHeader(theme),
                       if (!smallScreen)
-                        Container(
-                            height: 0.8,
-                            color: theme.dividerTheme.color ?? Colors.white24),
+                        Container(height: 0.8, color: theme.dividerTheme.color),
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.zero,
@@ -718,22 +904,51 @@ class _MenuScreenState extends State<MenuScreen> {
   AppBar _buildAppBar(ThemeData theme) {
     return AppBar(
       title: const Text('WELCOME'),
-      actions: _buildAppBarActions(),
+      actions: _buildAppBarActions(theme),
     );
   }
 
-  List<Widget> _buildAppBarActions() {
+  List<Widget> _buildAppBarActions(ThemeData theme) {
     return [
       IconButton(
-          icon: const Icon(Icons.person_outline),
-          tooltip: 'Tài khoản',
-          onPressed: () {}),
+        icon: Icon(widget.currentThemeMode == ThemeMode.dark
+            ? Icons.light_mode_outlined
+            : Icons.dark_mode_outlined),
+        tooltip: widget.currentThemeMode == ThemeMode.dark ? 'Sáng' : 'Tối',
+        onPressed: () {
+          widget.onThemeChanged(
+            widget.currentThemeMode == ThemeMode.light
+                ? ThemeMode.dark
+                : ThemeMode.light,
+          );
+        },
+        color: theme.appBarTheme.actionsIconTheme?.color,
+      ),
       IconButton(
-          icon: const Icon(Icons.search),
-          tooltip: 'Tìm kiếm',
-          onPressed: () {}),
+        icon: const Icon(Icons.person_outline),
+        tooltip: 'Tài khoản',
+        onPressed: () {},
+        color: theme.appBarTheme.actionsIconTheme?.color,
+      ),
       const SizedBox(width: kDefaultPadding / 2),
     ];
+  }
+
+  Widget _buildLargeScreenHeader(ThemeData theme) {
+    return Container(
+      color: theme.appBarTheme.backgroundColor,
+      padding: const EdgeInsets.symmetric(
+          horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
+      child: Row(
+        children: [
+          Expanded(
+              child: Text('WELCOME',
+                  textAlign: TextAlign.center,
+                  style: theme.appBarTheme.titleTextStyle)),
+          ..._buildAppBarActions(theme),
+        ],
+      ),
+    );
   }
 
   Widget _buildAppDrawer(ThemeData theme) {
@@ -741,8 +956,8 @@ class _MenuScreenState extends State<MenuScreen> {
         selectedIndex >= 1 && selectedIndex <= _categories.length;
     Color highlight = theme.colorScheme.secondary;
     final divider = Divider(
-      color: theme.dividerTheme.color?.withOpacity(0.5) ?? Colors.white24,
-      thickness: theme.dividerTheme.thickness ?? 1,
+      color: theme.dividerTheme.color?.withOpacity(0.5),
+      thickness: theme.dividerTheme.thickness,
       height: kDefaultPadding * 1.5,
       indent: kDefaultPadding * 2,
       endIndent: kDefaultPadding * 2,
@@ -762,38 +977,36 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
             child: Center(child: _buildLogo()),
           ),
-          _buildDrawerItem(
-              theme,
-              Icons.table_restaurant_outlined,
-              'Danh sách bàn ăn',
-              0,
-              selectedIndex,
-              highlight,
-              () => setState(() {
-                    selectedIndex = 0;
-                    _isMenuCategoriesExpanded = false;
-                    Navigator.pop(context);
-                  })),
+          _buildDrawerItem(theme, Icons.table_restaurant_outlined, 'Bàn ăn', 0,
+              selectedIndex, highlight, () {
+            _clearSearch();
+            setState(() {
+              selectedIndex = 0;
+              _isMenuCategoriesExpanded = false;
+              Navigator.pop(context);
+            });
+          }),
           divider,
-          _buildDrawerItem(
-              theme,
-              Icons.receipt_long_outlined,
-              'Danh sách đơn hàng',
-              orderScreenIndex,
-              selectedIndex,
-              highlight,
-              () => setState(() {
-                    selectedIndex = orderScreenIndex;
-                    _isMenuCategoriesExpanded = false;
-                    Navigator.pop(context);
-                  })),
+          _buildDrawerItem(theme, Icons.receipt_long_outlined, 'Đơn hàng',
+              orderScreenIndex, selectedIndex, highlight, () {
+            _clearSearch();
+            setState(() {
+              selectedIndex = orderScreenIndex;
+              _isMenuCategoriesExpanded = false;
+              Navigator.pop(context);
+            });
+          }),
           divider,
           ExpansionTile(
             leading: Icon(Icons.restaurant_menu_outlined,
-                color: isMenuSelected ? highlight : Colors.white70, size: 24),
-            title: Text('Danh sách món ăn',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isMenuSelected ? highlight : Colors.white,
+                color: isMenuSelected ? highlight : theme.iconTheme.color,
+                size: 24),
+            title: Text('Món ăn',
+                style:
+                    (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                  color: isMenuSelected
+                      ? highlight
+                      : theme.textTheme.bodyMedium?.color,
                   fontWeight:
                       isMenuSelected ? FontWeight.w600 : FontWeight.w500,
                   fontSize: 14.5,
@@ -803,20 +1016,14 @@ class _MenuScreenState extends State<MenuScreen> {
               if (!_isLoadingMenu && _menuErrorMessage == null) {
                 setState(() => _isMenuCategoriesExpanded = expanded);
               } else if (expanded) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(_isLoadingMenu
-                      ? 'Đang tải menu...'
-                      : 'Lỗi tải menu, không thể mở rộng.'),
-                  duration: const Duration(seconds: 1),
-                ));
-                Future.delayed(Duration.zero, () {
+                /* ... show error ... */ Future.delayed(Duration.zero, () {
                   if (mounted)
                     setState(() => _isMenuCategoriesExpanded = false);
                 });
               }
             },
-            iconColor: Colors.white,
-            collapsedIconColor: Colors.white70,
+            iconColor: theme.iconTheme.color,
+            collapsedIconColor: theme.iconTheme.color?.withOpacity(0.7),
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -828,10 +1035,11 @@ class _MenuScreenState extends State<MenuScreen> {
                     : _menuErrorMessage != null
                         ? Center(
                             child: Text(_menuErrorMessage!,
-                                style: TextStyle(color: Colors.red[300])))
+                                style:
+                                    TextStyle(color: theme.colorScheme.error)))
                         : _categories.isEmpty
                             ? Center(
-                                child: Text("Chưa có danh mục nào.",
+                                child: Text("Chưa có danh mục.",
                                     style: theme.textTheme.bodySmall))
                             : _buildCategoryButtonGrid(theme, true),
               ),
@@ -856,17 +1064,22 @@ class _MenuScreenState extends State<MenuScreen> {
         theme.textTheme.bodyMedium?.copyWith(fontSize: 14.5);
     return ListTile(
       leading: Icon(icon,
-          color: isSelected ? highlightColor : Colors.white70, size: 24),
+          color: isSelected
+              ? highlightColor
+              : theme.iconTheme.color?.withOpacity(0.8),
+          size: 24),
       title: Text(
         title,
-        style: drawerItemStyle?.copyWith(
-          color: isSelected ? highlightColor : Colors.white,
+        style: (drawerItemStyle ?? const TextStyle()).copyWith(
+          color:
+              isSelected ? highlightColor : theme.textTheme.bodyMedium?.color,
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
       onTap: onTapAction,
       selected: isSelected,
       selectedTileColor: theme.colorScheme.secondary.withOpacity(0.15),
+      hoverColor: theme.colorScheme.secondary.withOpacity(0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       contentPadding:
           const EdgeInsets.symmetric(horizontal: kDefaultPadding * 2.5),
@@ -876,7 +1089,8 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _buildNavigationRail(ThemeData theme) {
     final Color selectedColor = theme.colorScheme.secondary;
-    final Color unselectedColor = Colors.white;
+    final Color unselectedFGColor =
+        theme.colorScheme.onSurface.withOpacity(0.7);
     final railLabelStyle = theme.textTheme.titleMedium?.copyWith(
       fontSize: 15.5,
       letterSpacing: 0.3,
@@ -910,6 +1124,7 @@ class _MenuScreenState extends State<MenuScreen> {
           borderRadius: BorderRadius.circular(10),
           splashColor: selectedColor.withOpacity(0.1),
           highlightColor: selectedColor.withOpacity(0.05),
+          hoverColor: selectedColor.withOpacity(0.08),
           child: Container(
             decoration: BoxDecoration(
               color: isSelected
@@ -926,19 +1141,21 @@ class _MenuScreenState extends State<MenuScreen> {
                   data['icon'] as IconData,
                   color: isSelected
                       ? selectedColor
-                      : unselectedColor.withOpacity(0.8),
+                      : theme.iconTheme.color?.withOpacity(0.8),
                   size: isSelected ? 30 : 28,
                 ),
                 const SizedBox(width: kDefaultPadding * 1.5),
                 Flexible(
                   child: Text(
                     data['label'] as String,
-                    style: isSelected
-                        ? railLabelStyle?.copyWith(
-                            color: selectedColor, fontWeight: FontWeight.w600)
-                        : railLabelStyle?.copyWith(
-                            color: unselectedColor.withOpacity(0.7),
-                            fontWeight: FontWeight.w500),
+                    style: (isSelected
+                            ? railLabelStyle?.copyWith(
+                                color: selectedColor,
+                                fontWeight: FontWeight.w600)
+                            : railLabelStyle?.copyWith(
+                                color: unselectedFGColor,
+                                fontWeight: FontWeight.w500)) ??
+                        const TextStyle(),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
@@ -954,7 +1171,7 @@ class _MenuScreenState extends State<MenuScreen> {
               horizontal: kDefaultPadding * 1.5,
               vertical: kDefaultPadding * 0.5),
           child: Divider(
-            color: theme.dividerTheme.color?.withOpacity(0.5) ?? Colors.white24,
+            color: theme.dividerTheme.color?.withOpacity(0.5),
             height: 1,
             thickness: 1,
           ),
@@ -1014,20 +1231,16 @@ class _MenuScreenState extends State<MenuScreen> {
   void _handleDestinationSelected(int index) {
     setState(() {
       if (index == 0) {
+        _clearSearch();
         selectedIndex = 0;
         _isMenuCategoriesExpanded = false;
       } else if (index == 1) {
+        _clearSearch();
         selectedIndex = orderScreenIndex;
         _isMenuCategoriesExpanded = false;
       } else if (index == 2) {
         if (_isLoadingMenu || _menuErrorMessage != null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(_isLoadingMenu
-                ? 'Đang tải menu...'
-                : _menuErrorMessage ?? 'Lỗi menu'),
-            duration: const Duration(seconds: 1),
-          ));
-          return;
+          /* ... show error ... */ return;
         }
         _isMenuCategoriesExpanded = !_isMenuCategoriesExpanded;
         if (_isMenuCategoriesExpanded) {
@@ -1037,6 +1250,7 @@ class _MenuScreenState extends State<MenuScreen> {
               !(selectedIndex >= 1 && selectedIndex <= _categories.length);
           if ((isViewingTablesOrOrders || noCategorySelected) &&
               _categories.isNotEmpty) {
+            _clearSearch();
             selectedIndex = 1;
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted && _isMenuCategoriesExpanded) {
@@ -1044,13 +1258,13 @@ class _MenuScreenState extends State<MenuScreen> {
               }
             });
           }
+        } else {
+          if (selectedIndex >= 1 && selectedIndex <= _categories.length) {
+            _clearSearch();
+          }
         }
         if (_isMenuCategoriesExpanded && _categories.isEmpty) {
-          _isMenuCategoriesExpanded = false;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Chưa có danh mục món ăn nào.'),
-            duration: Duration(seconds: 2),
-          ));
+          /* ... show error ... */ _isMenuCategoriesExpanded = false;
         }
       }
     });
@@ -1065,51 +1279,27 @@ class _MenuScreenState extends State<MenuScreen> {
         width: width,
         height: height,
         fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          print("Error loading logo asset '$logoAssetPath': $error");
-          return Container(
-              height: height,
-              width: width ?? height * 1.8,
-              color: Colors.grey[700],
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.broken_image_outlined,
-                      color: Colors.red[300], size: height * 0.5),
-                  const SizedBox(height: 4),
-                  Text("Logo Error",
-                      style: TextStyle(color: Colors.red[300], fontSize: 10))
-                ],
-              ));
-        },
-        frameBuilder: (context, child, frame, wasSyncLoaded) {
-          if (wasSyncLoaded) {
-            return child;
-          }
-          return AnimatedOpacity(
-            child: child,
-            opacity: frame == null ? 0 : 1,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildLargeScreenHeader(ThemeData theme) {
-    return Container(
-      color: theme.appBarTheme.backgroundColor,
-      padding: const EdgeInsets.symmetric(
-          horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
-      child: Row(
-        children: [
-          Expanded(
-              child: Text('WELCOME',
-                  textAlign: TextAlign.center,
-                  style: theme.appBarTheme.titleTextStyle)),
-          ..._buildAppBarActions(),
-        ],
+        errorBuilder: (c, e, s) => Container(
+            height: height,
+            width: width ?? height * 1.8,
+            color: Colors.grey[700],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.broken_image_outlined,
+                    color: Colors.red[300], size: height * 0.5),
+                const SizedBox(height: 4),
+                Text("Logo Error",
+                    style: TextStyle(color: Colors.red[300], fontSize: 10))
+              ],
+            )),
+        frameBuilder: (c, child, frame, wasSync) => wasSync
+            ? child
+            : AnimatedOpacity(
+                child: child,
+                opacity: frame == null ? 0 : 1,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut),
       ),
     );
   }
@@ -1130,29 +1320,36 @@ class _MenuScreenState extends State<MenuScreen> {
       itemBuilder: (context, index) {
         final table = tables[index];
         int pendingCount = table['pendingOrderCount'] as int? ?? 0;
-        bool hasPendingOrders = pendingCount > 0;
+        bool hasPending = pendingCount > 0;
         bool isHovered = _hoveredTableIndex == index;
-        Color cardBackgroundColor;
-        Color iconColor;
-        Color textColor;
-        Color badgeColor = theme.colorScheme.error;
-        Color borderColor = Colors.transparent;
+        Color cardBg,
+            iconColor,
+            textColor,
+            badgeColor = theme.colorScheme.error,
+            badgeTextColor = theme.colorScheme.onError,
+            borderColor = Colors.transparent;
         double elevation = kCardElevation;
-        if (hasPendingOrders) {
-          cardBackgroundColor = Color.lerp(theme.cardTheme.color!,
-              theme.colorScheme.error.withOpacity(0.4), 0.5)!;
-          iconColor = Colors.yellowAccent[100]!;
-          textColor = Colors.white;
+        if (hasPending) {
+          cardBg = Color.lerp(
+              theme.cardTheme.color ?? theme.colorScheme.surface,
+              theme.colorScheme.errorContainer ??
+                  theme.colorScheme.error.withOpacity(0.2),
+              0.6)!;
+          iconColor = theme.colorScheme.error;
+          textColor =
+              theme.colorScheme.onErrorContainer ?? theme.colorScheme.error;
           borderColor = theme.colorScheme.error.withOpacity(0.8);
           elevation = kCardElevation + 4;
         } else {
-          cardBackgroundColor = theme.cardTheme.color!;
-          iconColor = Colors.white.withOpacity(0.65);
-          textColor = Colors.white.withOpacity(0.85);
+          cardBg = theme.cardTheme.color ?? theme.colorScheme.surface;
+          iconColor = theme.iconTheme.color?.withOpacity(0.65) ?? Colors.grey;
+          textColor = (theme.textTheme.bodyMedium?.color ?? Colors.white)
+              .withOpacity(0.85);
         }
         if (isHovered) {
-          cardBackgroundColor = cardBackgroundColor.withOpacity(0.85);
-          borderColor = hasPendingOrders
+          cardBg = Color.alphaBlend(
+              theme.colorScheme.secondary.withOpacity(0.1), cardBg);
+          borderColor = hasPending
               ? theme.colorScheme.error
               : theme.colorScheme.secondary.withOpacity(0.7);
           elevation += 4;
@@ -1168,7 +1365,7 @@ class _MenuScreenState extends State<MenuScreen> {
               border: Border.all(color: borderColor, width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isHovered ? 0.35 : 0.2),
+                  color: theme.shadowColor.withOpacity(isHovered ? 0.4 : 0.2),
                   blurRadius: isHovered ? 10 : 5,
                   spreadRadius: 0,
                   offset: Offset(0, isHovered ? 4 : 2),
@@ -1176,9 +1373,10 @@ class _MenuScreenState extends State<MenuScreen> {
               ],
             ),
             child: Material(
-              color: cardBackgroundColor,
+              color: cardBg,
               borderRadius: BorderRadius.circular(13),
               clipBehavior: Clip.antiAlias,
+              elevation: 0,
               child: InkWell(
                 onTap: () => _showOrderPopup(context, index),
                 borderRadius: BorderRadius.circular(13),
@@ -1192,12 +1390,17 @@ class _MenuScreenState extends State<MenuScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.table_restaurant_rounded,
-                              size: 55, color: iconColor),
+                          Icon(
+                            Icons.table_restaurant_rounded,
+                            size: 55,
+                            color: iconColor,
+                          ),
                           const SizedBox(height: kDefaultPadding * 1.5),
                           Text(
                             table['name'] as String? ?? 'Bàn ?',
-                            style: theme.textTheme.titleMedium?.copyWith(
+                            style: (theme.textTheme.titleMedium ??
+                                    const TextStyle())
+                                .copyWith(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: textColor,
@@ -1209,7 +1412,7 @@ class _MenuScreenState extends State<MenuScreen> {
                         ],
                       ),
                     ),
-                    if (hasPendingOrders)
+                    if (hasPending)
                       Positioned(
                         top: 10,
                         right: 10,
@@ -1219,20 +1422,21 @@ class _MenuScreenState extends State<MenuScreen> {
                               color: badgeColor,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: theme.colorScheme.surface
+                                      .withOpacity(0.9),
                                   width: 1.8),
-                              boxShadow: const [
+                              boxShadow: [
                                 BoxShadow(
-                                    color: Colors.black87,
+                                    color: Colors.black.withOpacity(0.5),
                                     blurRadius: 5,
-                                    offset: Offset(1, 1))
+                                    offset: const Offset(1, 1))
                               ]),
                           constraints:
                               const BoxConstraints(minWidth: 28, minHeight: 28),
                           child: Center(
                               child: Text('$pendingCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: badgeTextColor,
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.bold,
                                   ))),
@@ -1249,29 +1453,78 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildSelectedMenuCategoryList(ThemeData theme) {
-    int categoryArrayIndex = selectedIndex - 1;
-    if (categoryArrayIndex < 0 || categoryArrayIndex >= _categories.length) {
+    int catIdx = selectedIndex - 1;
+    if (catIdx < 0 || catIdx >= _categories.length) {
       return Center(
           child: Text("Danh mục không hợp lệ.",
               style: theme.textTheme.bodyMedium));
     }
-    if (categoryArrayIndex >= _categoryKeys.length) {
+    if (catIdx >= _categoryKeys.length) {
       return Center(
-          child: Text("Đang chuẩn bị danh mục...",
-              style: theme.textTheme.bodySmall));
+          child: Text("Đang chuẩn bị...", style: theme.textTheme.bodySmall));
     }
-    final String categoryName = _categories[categoryArrayIndex];
-    final List<MenuItem> itemsInCategory =
-        _menuItemsByCategory[categoryName] ?? [];
-    final GlobalKey categoryHeaderKey = _categoryKeys[categoryArrayIndex];
+    final String catName = _categories[catIdx];
+    final List<MenuItem> allItems = _menuItemsByCategory[catName] ?? [];
+    final GlobalKey catKey = _categoryKeys[catIdx];
+    final String query = _searchQuery.toLowerCase().trim();
+    final List<MenuItem> filteredItems = query.isEmpty
+        ? allItems
+        : allItems
+            .where((i) =>
+                i.name.toLowerCase().contains(query) ||
+                i.itemId.toString().contains(query))
+            .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          key: categoryHeaderKey,
-          padding: const EdgeInsets.fromLTRB(kDefaultPadding * 2,
-              kDefaultPadding * 2, kDefaultPadding * 2, kDefaultPadding),
-          child: Text(categoryName, style: theme.textTheme.headlineSmall),
+          key: catKey,
+          padding: const EdgeInsets.fromLTRB(
+              kDefaultPadding * 2,
+              kDefaultPadding * 1.5,
+              kDefaultPadding * 2,
+              kDefaultPadding * 0.5),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  catName,
+                  style: theme.textTheme.headlineSmall,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: kDefaultPadding * 1.5),
+              SizedBox(
+                width: 250,
+                height: 40,
+                child: TextField(
+                  controller: _searchController,
+                  style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(fontSize: 13.5),
+                  decoration: InputDecoration(
+                    hintText: 'Tìm món (tên, ID)...',
+                    prefixIcon: Icon(Icons.search, size: 18),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear, size: 18),
+                            tooltip: 'Xóa',
+                            splashRadius: 15,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: _clearSearch,
+                          )
+                        : null,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding * 2),
@@ -1280,61 +1533,70 @@ class _MenuScreenState extends State<MenuScreen> {
               thickness: theme.dividerTheme.thickness),
         ),
         const SizedBox(height: kDefaultPadding),
-        if (itemsInCategory.isEmpty)
+        if (allItems.isEmpty)
           Expanded(
               child: Center(
             child: Padding(
               padding: const EdgeInsets.all(kDefaultPadding * 2),
               child: Text(
-                "Không có món ăn nào trong danh mục '$categoryName'.",
-                style:
-                    theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                "Không có món nào trong '$catName'.",
+                style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                    .copyWith(
+                        color: theme.textTheme.bodyMedium?.color
+                            ?.withOpacity(0.7)),
                 textAlign: TextAlign.center,
               ),
             ),
           ))
+        else if (filteredItems.isEmpty && query.isNotEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(kDefaultPadding * 2),
+                child: Text(
+                  "Không tìm thấy món khớp \"$query\".",
+                  style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(
+                          color: theme.textTheme.bodyMedium?.color
+                              ?.withOpacity(0.7)),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          )
         else
           Expanded(
             child: ListView.builder(
-              key: PageStorageKey<String>('menuList_$categoryName'),
+              key: PageStorageKey<String>('menuList_${catName}_$query'),
               controller: _menuScrollController,
               padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
-              itemCount: itemsInCategory.length,
+              itemCount: filteredItems.length,
               itemBuilder: (context, itemIndex) {
-                MenuItem currentItemFromCategory = itemsInCategory[itemIndex];
-                MenuItem item =
-                    _menuItemsById[currentItemFromCategory.itemId] ??
-                        currentItemFromCategory;
-                String? relativePathFromDb = item.img;
-                Widget imageWidget;
-                if (relativePathFromDb != null &&
-                    relativePathFromDb.isNotEmpty) {
-                  String assetPath = 'assets/' +
-                      (relativePathFromDb.startsWith('/')
-                          ? relativePathFromDb.substring(1)
-                          : relativePathFromDb);
-                  print(
-                      "Attempting to load asset: $assetPath for item: ${item.name}");
-                  imageWidget = Image.asset(assetPath,
+                MenuItem current = filteredItems[itemIndex];
+                MenuItem item = _menuItemsById[current.itemId] ?? current;
+                String? imgPath = item.img;
+                Widget imgWidget;
+                if (imgPath != null && imgPath.isNotEmpty) {
+                  String asset = 'assets/' +
+                      (imgPath.startsWith('/')
+                          ? imgPath.substring(1)
+                          : imgPath);
+                  imgWidget = Image.asset(asset,
                       width: kMenuItemImageSize,
                       height: kMenuItemImageSize,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        print("Error loading asset '$assetPath': $error");
-                        return _buildPlaceholderImage(hasError: true);
-                      },
-                      frameBuilder: (context, child, frame, wasSyncLoaded) =>
-                          wasSyncLoaded
-                              ? child
-                              : AnimatedOpacity(
-                                  opacity: frame == null ? 0 : 1,
-                                  duration: const Duration(milliseconds: 350),
-                                  curve: Curves.easeOut,
-                                  child: child,
-                                ));
+                      errorBuilder: (c, e, s) =>
+                          _buildPlaceholderImage(hasError: true),
+                      frameBuilder: (c, child, frame, wasSync) => wasSync
+                          ? child
+                          : AnimatedOpacity(
+                              opacity: frame == null ? 0 : 1,
+                              duration: const Duration(milliseconds: 350),
+                              curve: Curves.easeOut,
+                              child: child,
+                            ));
                 } else {
-                  print("No image path for item: ${item.name}");
-                  imageWidget = _buildPlaceholderImage();
+                  imgWidget = _buildPlaceholderImage();
                 }
                 return Card(
                   margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
@@ -1345,7 +1607,7 @@ class _MenuScreenState extends State<MenuScreen> {
                           topLeft: Radius.circular(12),
                           bottomLeft: Radius.circular(12),
                         ),
-                        child: imageWidget,
+                        child: imgWidget,
                       ),
                       Expanded(
                         child: Padding(
@@ -1358,16 +1620,18 @@ class _MenuScreenState extends State<MenuScreen> {
                             children: [
                               Text(
                                 item.name,
-                                style: theme.textTheme.titleMedium
-                                    ?.copyWith(fontSize: 16.5),
+                                style: (theme.textTheme.titleMedium ??
+                                        const TextStyle())
+                                    .copyWith(fontSize: 16.5),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: kDefaultPadding * 0.6),
                               Text(
                                 "ID: ${item.itemId}",
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(fontSize: 11),
+                                style: (theme.textTheme.bodySmall ??
+                                        const TextStyle())
+                                    .copyWith(fontSize: 11),
                               ),
                             ],
                           ),
@@ -1392,21 +1656,26 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildPlaceholderImage({bool hasError = false}) {
+    final theme = Theme.of(context);
     return Container(
       width: kMenuItemImageSize,
       height: kMenuItemImageSize,
-      color: const Color(0xFF37474F),
+      color: theme.cardTheme.color?.withOpacity(0.5) ??
+          theme.colorScheme.surface.withOpacity(0.5),
       child: Icon(
         hasError ? Icons.image_not_supported_outlined : Icons.restaurant,
-        color: hasError ? Colors.redAccent.withOpacity(0.7) : Colors.grey[500],
+        color: hasError
+            ? theme.colorScheme.error.withOpacity(0.7)
+            : theme.iconTheme.color?.withOpacity(0.4),
         size: kMenuItemImageSize * 0.4,
       ),
     );
   }
 
   Widget _buildBottomActionBar(ThemeData theme) {
-    final footerTextStyle = theme.textTheme.bodySmall?.copyWith(
-      color: Colors.white.withOpacity(0.8),
+    final footerTextStyle =
+        (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+      color: theme.textTheme.bodySmall?.color?.withOpacity(0.8),
       fontSize: 11.5,
       fontWeight: FontWeight.w400,
       letterSpacing: 0.4,
@@ -1432,27 +1701,25 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildExclamationOverlay(bool smallScreen) {
+    final theme = Theme.of(context);
     if (!_showExclamationMark) return const SizedBox.shrink();
     double rightEdge =
         smallScreen ? kDefaultPadding : kRailWidth + kDefaultPadding;
-    const String exclamationAssetPath = 'assets/exclamation_mark.png';
+    const String assetPath = 'assets/exclamation_mark.png';
     return Positioned(
       right: rightEdge - kExclamationMarkSize / 2,
       top: MediaQuery.of(context).size.height / 2 - kExclamationMarkSize / 2,
       child: Transform.rotate(
         angle: _exclamationMarkAngle,
         child: IgnorePointer(
-          child: Image.asset(
-            exclamationAssetPath,
-            width: kExclamationMarkSize,
-            height: kExclamationMarkSize,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.yellowAccent,
-                size: kExclamationMarkSize),
-          ),
-        ),
+            child: Image.asset(
+          assetPath,
+          width: kExclamationMarkSize,
+          height: kExclamationMarkSize,
+          fit: BoxFit.contain,
+          errorBuilder: (c, e, s) => Icon(Icons.warning_amber_rounded,
+              color: theme.colorScheme.secondary, size: kExclamationMarkSize),
+        )),
       ),
     );
   }
@@ -1469,42 +1736,44 @@ class _MenuScreenState extends State<MenuScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemBuilder: (context, index) {
-        final categoryViewIndex = index + 1;
-        final isSelected = selectedIndex == categoryViewIndex;
-        final categoryName = _categories[index];
-        final selectedBgColor = theme.colorScheme.secondary.withOpacity(0.9);
-        final unselectedBgColor =
-            theme.cardTheme.color?.withOpacity(0.8) ?? const Color(0xFF455A64);
-        final selectedBorderColor = theme.colorScheme.secondary;
-        final hoverColor = theme.colorScheme.secondary.withOpacity(0.15);
-        final splashColor = theme.colorScheme.secondary.withOpacity(0.25);
-        final shadowColor = Colors.black.withOpacity(isSelected ? 0.3 : 0.15);
-        const animationDuration = Duration(milliseconds: 250);
+        final catIdx = index + 1;
+        final isSel = selectedIndex == catIdx;
+        final catName = _categories[index];
+        final selBg = theme.colorScheme.secondary.withOpacity(0.9);
+        final unselBg = theme.cardTheme.color?.withOpacity(0.9) ??
+            theme.colorScheme.surface;
+        final selBorder = theme.colorScheme.secondary;
+        final hover = theme.colorScheme.secondary.withOpacity(0.15);
+        final splash = theme.colorScheme.secondary.withOpacity(0.25);
+        final shadow = theme.shadowColor.withOpacity(isSel ? 0.3 : 0.15);
+        const animDur = Duration(milliseconds: 250);
+        Color fgColor = theme.colorScheme.onSecondary;
+        if (!isSel) {
+          fgColor = theme.colorScheme.onSurface.withOpacity(0.9);
+        }
         return AnimatedContainer(
-          duration: animationDuration,
+          duration: animDur,
           curve: Curves.easeInOutCubic,
-          margin: EdgeInsets.all(isSelected ? 0 : 2.0),
+          margin: EdgeInsets.all(isSel ? 0 : 2.0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10.0),
             boxShadow: [
               BoxShadow(
-                  color: shadowColor,
-                  blurRadius: isSelected ? 8.0 : 4.0,
-                  offset: Offset(0, isSelected ? 4.0 : 2.0))
+                  color: shadow,
+                  blurRadius: isSel ? 8.0 : 4.0,
+                  offset: Offset(0, isSel ? 4.0 : 2.0))
             ],
           ),
           child: ElevatedButton(
             style: ButtonStyle(
-              backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                  (Set<MaterialState> states) {
-                if (states.contains(MaterialState.pressed))
-                  return splashColor.withOpacity(0.4);
-                return isSelected ? selectedBgColor : unselectedBgColor;
+              backgroundColor: MaterialStateProperty.resolveWith<Color>((s) {
+                if (s.contains(MaterialState.pressed))
+                  return splash.withOpacity(0.4);
+                return isSel ? selBg : unselBg;
               }),
-              foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-              overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                  (Set<MaterialState> states) {
-                if (states.contains(MaterialState.hovered)) return hoverColor;
+              foregroundColor: MaterialStateProperty.all<Color>(fgColor),
+              overlayColor: MaterialStateProperty.resolveWith<Color?>((s) {
+                if (s.contains(MaterialState.hovered)) return hover;
                 return null;
               }),
               shadowColor: MaterialStateProperty.all(Colors.transparent),
@@ -1512,9 +1781,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0),
                       side: BorderSide(
-                          color: isSelected
-                              ? selectedBorderColor
-                              : Colors.transparent,
+                          color: isSel ? selBorder : Colors.transparent,
                           width: 1.5))),
               padding: MaterialStateProperty.all<EdgeInsetsGeometry>(
                   const EdgeInsets.symmetric(
@@ -1522,22 +1789,23 @@ class _MenuScreenState extends State<MenuScreen> {
                       vertical: kDefaultPadding * 0.75)),
               minimumSize: MaterialStateProperty.all(const Size(0, 40)),
               splashFactory: NoSplash.splashFactory,
+              elevation: MaterialStateProperty.all(0),
             ),
             onPressed: () {
-              _scrollToCategory(categoryViewIndex);
+              _clearSearch();
+              _scrollToCategory(catIdx);
               if (isDrawer) Navigator.pop(context);
             },
             child: AnimatedDefaultTextStyle(
-              duration: animationDuration,
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13.5,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  letterSpacing: isSelected ? 0.4 : 0.2,
-                  fontFamily:
-                      Theme.of(context).textTheme.labelLarge?.fontFamily),
+              duration: animDur,
+              style: (theme.textTheme.labelLarge ?? const TextStyle()).copyWith(
+                color: fgColor,
+                fontSize: 13.5,
+                fontWeight: isSel ? FontWeight.w600 : FontWeight.w500,
+                letterSpacing: isSel ? 0.4 : 0.2,
+              ),
               child: Text(
-                categoryName,
+                catName,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
@@ -1551,11 +1819,10 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _buildCurrentView(ThemeData theme) {
     int stackIndex = 0;
-    if (selectedIndex == orderScreenIndex) {
+    if (selectedIndex == orderScreenIndex)
       stackIndex = 1;
-    } else if (selectedIndex >= 1 && selectedIndex <= _categories.length) {
+    else if (selectedIndex >= 1 && selectedIndex <= _categories.length)
       stackIndex = 2;
-    }
     List<Widget> pages = [
       _buildTableGrid(theme),
       KitchenOrderListScreen(
@@ -1564,9 +1831,8 @@ class _MenuScreenState extends State<MenuScreen> {
         onTableCleared: _handleTableCleared,
       ),
       Builder(builder: (context) {
-        bool isMenuView =
-            selectedIndex >= 1 && selectedIndex <= _categories.length;
-        if (isMenuView) {
+        bool isMenu = selectedIndex >= 1 && selectedIndex <= _categories.length;
+        if (isMenu) {
           if (_isLoadingMenu)
             return Center(
                 child: CircularProgressIndicator(
@@ -1578,17 +1844,20 @@ class _MenuScreenState extends State<MenuScreen> {
               child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.cloud_off_outlined,
-                        color: Colors.redAccent, size: 50),
+                    Icon(Icons.cloud_off_outlined,
+                        color: theme.colorScheme.error, size: 50),
                     const SizedBox(height: kDefaultPadding * 2),
                     Text(_menuErrorMessage!,
                         textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: Colors.white70)),
+                        style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                            .copyWith(
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.7))),
                     const SizedBox(height: kDefaultPadding * 2),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent[100]),
+                          backgroundColor: theme.colorScheme.errorContainer,
+                          foregroundColor: theme.colorScheme.onErrorContainer),
                       onPressed: _fetchMenuData,
                       icon: const Icon(Icons.refresh),
                       label: const Text('Thử lại'),
@@ -1600,25 +1869,28 @@ class _MenuScreenState extends State<MenuScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(kDefaultPadding * 2),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.menu_book_outlined,
-                        color: Colors.grey[600], size: 50),
-                    const SizedBox(height: kDefaultPadding * 2),
-                    Text("Không tìm thấy danh mục món ăn nào.",
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: Colors.white70)),
-                    const SizedBox(height: kDefaultPadding * 2),
-                    ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                theme.colorScheme.secondary.withOpacity(0.8)),
-                        onPressed: _fetchMenuData,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Tải lại Menu'))
-                  ],
-                ),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.menu_book_outlined,
+                          color: theme.iconTheme.color?.withOpacity(0.5),
+                          size: 50),
+                      const SizedBox(height: kDefaultPadding * 2),
+                      Text("Không có danh mục.",
+                          textAlign: TextAlign.center,
+                          style:
+                              (theme.textTheme.bodyMedium ?? const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7))),
+                      const SizedBox(height: kDefaultPadding * 2),
+                      ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  theme.colorScheme.secondary.withOpacity(0.8)),
+                          onPressed: _fetchMenuData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Tải lại Menu'))
+                    ]),
               ),
             );
           if (stackIndex == 2) return _buildSelectedMenuCategoryList(theme);
@@ -1671,10 +1943,14 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
     final switchTheme = theme.switchTheme;
     bool displayValue = _optimisticValue;
     Color statusColor = _isUpdating
-        ? (Colors.grey[500] ?? Colors.grey)
+        ? theme.disabledColor
         : (displayValue
-            ? (Colors.greenAccent[100] ?? Colors.greenAccent)
-            : (Colors.redAccent[100] ?? Colors.redAccent));
+            ? (theme.brightness == Brightness.dark
+                ? Colors.greenAccent[100]!
+                : Colors.green[700]!)
+            : (theme.brightness == Brightness.dark
+                ? Colors.redAccent[100]!
+                : Colors.red[700]!));
     String statusText = _isUpdating ? '...' : (displayValue ? 'Có sẵn' : 'Hết');
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -1705,17 +1981,11 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
                         setState(() {
                           if (!success) {
                             _optimisticValue = !newValue;
-                            print(
-                                "API update failed, reverting switch for ${widget.item.name}");
-                          } else {
-                            print(
-                                "API update succeeded for ${widget.item.name}");
                           }
                           _isUpdating = false;
                         });
                       } else {
-                        print(
-                            "Switch widget unmounted after API call for ${widget.item.name}");
+                        print("Switch unmounted ${widget.item.name}");
                       }
                     },
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1731,7 +2001,7 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
         const SizedBox(height: 4),
         Text(
           statusText,
-          style: theme.textTheme.bodySmall?.copyWith(
+          style: (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
             fontSize: 10.5,
             color: statusColor,
             fontWeight: FontWeight.w500,
@@ -1747,7 +2017,7 @@ class _AvailabilitySwitchState extends State<AvailabilitySwitch> {
 // --- Enum OrderListView ---
 enum OrderListView { pending, completed }
 
-// --- Kitchen Order List Screen ---
+// --- OPTIMIZED Kitchen Order List Screen ---
 class KitchenOrderListScreen extends StatefulWidget {
   final OrderUpdateCallback? onOrderUpdate;
   final TableClearedCallback? onTableCleared;
@@ -1760,7 +2030,7 @@ class KitchenOrderListScreen extends StatefulWidget {
 
 class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     with AutomaticKeepAliveClientMixin {
-  // ***** MODIFIED: Use ValueNotifier for pending orders *****
+  // --- State variables ---
   final ValueNotifier<List<KitchenListOrder>> _pendingOrdersNotifier =
       ValueNotifier([]);
   List<KitchenListOrder> get _pendingOrders => _pendingOrdersNotifier.value;
@@ -1770,6 +2040,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
 
   List<KitchenListOrder> _completedOrders = [];
   bool _isLoadingPending = true;
+  bool _isBackgroundLoading = false;
   String? _pendingErrorMessage;
   bool _isLoadingCompleted = false;
   String? _completedErrorMessage;
@@ -1791,6 +2062,11 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   final int _maxReconnectAttempts = 10;
   final Duration _initialReconnectDelay = const Duration(seconds: 3);
   final Duration _maxReconnectDelay = const Duration(minutes: 1);
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+  List<KitchenListOrder> _filteredPendingOrders = [];
+  List<KitchenListOrder> _filteredCompletedOrders = [];
+  bool _isHandlingWebSocketUpdate = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -1798,27 +2074,90 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   void initState() {
     super.initState();
     print("KitchenOrderListScreen initState");
+    _searchController.addListener(_onSearchChanged);
+    _pendingOrdersNotifier.addListener(_onPendingOrdersChanged);
     _fetchPendingOrders();
     _connectWebSocket();
+  }
+
+  void _onPendingOrdersChanged() {
+    if (mounted) {
+      setState(() {
+        _updateFilteredLists();
+      });
+    }
   }
 
   @override
   void dispose() {
     print("KitchenOrderListScreen dispose");
+    _pendingOrdersNotifier.removeListener(_onPendingOrdersChanged);
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     _disconnectWebSocket();
     _reconnectTimer?.cancel();
     _pendingOrdersNotifier.dispose();
     super.dispose();
-  } // Dispose notifier
+  }
 
-  // --- WebSocket Methods (unchanged) ---
+  // --- Search & Filter ---
+  void _onSearchChanged() {
+    if (mounted && _searchQuery != _searchController.text) {
+      setState(() {
+        _searchQuery = _searchController.text;
+        _updateFilteredLists();
+      });
+    } else if (!mounted) {
+      _searchQuery = _searchController.text;
+    }
+  }
+
+  void _clearSearch() {
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    } else if (_searchQuery.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _searchQuery = "";
+          _updateFilteredLists();
+        });
+      } else {
+        _searchQuery = "";
+      }
+    }
+  }
+
+  void _updateFilteredLists() {
+    final query = _searchQuery.toLowerCase().trim();
+    if (query.isEmpty) {
+      _filteredPendingOrders = List.from(_pendingOrders);
+      _filteredCompletedOrders = List.from(_completedOrders);
+    } else {
+      _filteredPendingOrders = _pendingOrders.where((o) {
+        final t = o.tableNumber?.toString() ?? "";
+        final id = o.orderId.toString();
+        return id.contains(query) ||
+            (o.tableNumber != null && o.tableNumber! > 0 && t.contains(query));
+      }).toList();
+      _filteredCompletedOrders = _completedOrders.where((o) {
+        final t = o.tableNumber?.toString() ?? "";
+        final id = o.orderId.toString();
+        return id.contains(query) ||
+            (o.tableNumber != null && o.tableNumber! > 0 && t.contains(query));
+      }).toList();
+    }
+    print(
+        "Filtering done. Q:'$query'. P:${_filteredPendingOrders.length}, C:${_filteredCompletedOrders.length}");
+  }
+
+  // --- WebSocket ---
   void _connectWebSocket() {
     if (_isConnecting || _isConnected || _channel != null) return;
     if (!mounted) return;
     setState(() {
       _isConnecting = true;
     });
-    print("WebSocket: Attempting to connect to $kWebSocketUrl...");
+    print("WS: Connect $kWebSocketUrl...");
     try {
       _channel = WebSocketChannel.connect(Uri.parse(kWebSocketUrl));
       _isConnected = false;
@@ -1828,7 +2167,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
         _isConnecting = false;
         return;
       }
-      print("WebSocket: Connection established, listening for messages...");
+      print("WS: OK, listening...");
       setState(() {
         _isConnected = true;
         _isConnecting = false;
@@ -1836,14 +2175,14 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       });
       _reconnectTimer?.cancel();
       _channel!.stream.listen(
-        (message) {
+        (m) {
           if (!mounted) return;
-          print("WebSocket: Received message: $message");
-          _handleWebSocketMessage(message);
+          print("WS: RX $m");
+          _handleWebSocketMessage(m);
         },
-        onError: (error) {
+        onError: (e) {
           if (!mounted) return;
-          print("WebSocket: Error: $error");
+          print("WS: Err $e");
           setState(() {
             _isConnected = false;
             _isConnecting = false;
@@ -1853,7 +2192,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
         onDone: () {
           if (!mounted) return;
           print(
-              "WebSocket: Connection closed (onDone). Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}");
+              "WS: Done. Code: ${_channel?.closeCode}, Reason: ${_channel?.closeReason}");
           setState(() {
             _isConnected = false;
             _isConnecting = false;
@@ -1869,7 +2208,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      print("WebSocket: Connection failed: $e");
+      print("WS: Conn fail $e");
       setState(() {
         _isConnected = false;
         _isConnecting = false;
@@ -1880,7 +2219,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   }
 
   void _disconnectWebSocket() {
-    print("WebSocket: Disconnecting...");
+    print("WS: Disconnect...");
     _reconnectTimer?.cancel();
     _channel?.sink.close(status.goingAway);
     _channel = null;
@@ -1891,122 +2230,273 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
   void _scheduleReconnect() {
     if (!mounted || _reconnectTimer?.isActive == true || _isConnecting) return;
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      print("WebSocket: Max reconnect attempts reached.");
+      print("WS: Max reconnect.");
       _reconnectAttempts = 0;
       return;
     }
     _reconnectAttempts++;
     final delay =
         _initialReconnectDelay * math.pow(1.5, _reconnectAttempts - 1);
-    final clampedDelay =
-        delay > _maxReconnectDelay ? _maxReconnectDelay : delay;
+    final clamped = delay > _maxReconnectDelay ? _maxReconnectDelay : delay;
     print(
-        "WebSocket: Scheduling reconnect attempt #$_reconnectAttempts in ${clampedDelay.inSeconds} seconds...");
-    _reconnectTimer = Timer(clampedDelay, () {
+        "WS: Sched reconnect #${_reconnectAttempts} in ${clamped.inSeconds}s...");
+    _reconnectTimer = Timer(clamped, () {
       if (mounted) {
         _connectWebSocket();
       }
     });
   }
 
-  void _handleWebSocketMessage(dynamic message) {
-    print("WebSocket: Handling message - Triggering pending order refresh.");
-    dynamic decodedMessage;
-    if (message is String) {
-      try {
-        decodedMessage = jsonDecode(message);
-        print("WebSocket: Decoded message: $decodedMessage");
-      } catch (e) {
-        print("WebSocket: Message is not valid JSON: $message");
-      }
-    } else {
-      print(
-          "WebSocket: Received non-string message type: ${message.runtimeType}");
-    }
-    if (mounted) {
-      _fetchPendingOrders(forceRefresh: true);
-    }
-  }
+  // OPTIMIZED WebSocket Handler
+  // OPTIMIZED WebSocket Handler
+  void _handleWebSocketMessage(dynamic message) async {
+    print("WS: Handle msg -> Check for changes.");
+    if (_isHandlingWebSocketUpdate || !mounted)
+      return; // Prevent overlapping updates
 
-  // --- Data Fetching Methods ---
-  // ***** MODIFIED: Update _pendingOrdersNotifier in setState *****
-  Future<void> _fetchPendingOrders({bool forceRefresh = false}) async {
-    if (_isLoadingPending && !forceRefresh) return;
-    if (!mounted) return;
-    if (forceRefresh) {
-      print("Kitchen: Force refreshing pending orders.");
-      final pendingSessionIds = _pendingOrders.map((o) => o.sessionId).toSet();
-      _tableNumberCache
-          .removeWhere((sessionId, _) => pendingSessionIds.contains(sessionId));
-      _fetchingTableSessionIds
-          .removeWhere((sessionId) => pendingSessionIds.contains(sessionId));
-    }
     setState(() {
-      _isLoadingPending = true;
-      _pendingErrorMessage = null;
-      if (forceRefresh) _inProgressOrderIds.clear();
-    });
-    List<KitchenListOrder> finalOrders = [];
-    String? errorMsg;
-    Map<int, int> countsByTable = {};
+      _isHandlingWebSocketUpdate = true;
+    }); // Set flag
+
+    List<KitchenListOrder> inProgressFetched =
+        []; // <<<--- Define variable to hold fetched in-progress orders
+
     try {
-      final results = await Future.wait([
-        _fetchOrdersWithStatus('ordered'),
-        _fetchOrdersWithStatus('in_progress'),
-      ]);
-      final orderedOrders = results[0];
-      final inProgressOrders = results[1];
-      List<KitchenListOrder> combinedPendingOrders = [
-        ...orderedOrders,
-        ...inProgressOrders,
-      ];
-      final uniquePendingOrdersMap = <int, KitchenListOrder>{
-        for (var order in combinedPendingOrders) order.orderId: order
-      };
-      final sortedOrders = uniquePendingOrdersMap.values.toList()
-        ..sort((a, b) => a.orderTime.compareTo(b.orderTime));
-      final ordersWithTableNumbers =
-          await _fetchTableNumbersForOrders(sortedOrders);
-      finalOrders = ordersWithTableNumbers;
-      countsByTable.clear();
-      for (var order in finalOrders) {
-        if (order.tableNumber != null && order.tableNumber! > 0) {
-          countsByTable[order.tableNumber!] =
-              (countsByTable[order.tableNumber!] ?? 0) + 1;
-        }
-      }
+      // 1. Fetch ONLY the current list of pending order IDs and statuses
+      print("WS Update: Fetching current pending orders status...");
+      List<KitchenListOrder> currentServerPending = [];
       try {
-        widget.onOrderUpdate?.call(countsByTable);
+        final results = await Future.wait([
+          _fetchOrdersWithStatus('ordered'),
+          _fetchOrdersWithStatus('in_progress'), // Fetch both statuses
+        ], eagerError: true);
+        if (!mounted) return;
+        currentServerPending = [...results[0], ...results[1]];
+        inProgressFetched =
+            results[1]; // <<<--- Assign the fetched in-progress list here
       } catch (e) {
-        print("Kitchen: Error calling onOrderUpdate callback: $e");
-      }
-      _inProgressOrderIds.clear();
-      for (var order in finalOrders) {
-        if (inProgressOrders
-            .any((ipOrder) => ipOrder.orderId == order.orderId)) {
-          _inProgressOrderIds.add(order.orderId);
+        print("WS Update: Error fetching orders during WS update: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Lỗi kiểm tra cập nhật đơn hàng.'),
+            backgroundColor: Colors.orangeAccent.withOpacity(0.8),
+            duration: Duration(seconds: 2),
+          ));
         }
+        // Ensure flag is reset even on error
+        if (mounted)
+          setState(() {
+            _isHandlingWebSocketUpdate = false;
+          });
+        return; // Exit if we can't get the current server state
       }
-    } catch (e) {
-      errorMsg = "Lỗi tải đơn hàng: ${e.toString()}";
-      print("Kitchen: Error fetching PENDING orders: $e");
-      if (mounted) {
-        try {
-          widget.onOrderUpdate?.call({});
-        } catch (e) {
+
+      if (!mounted) return;
+
+      final serverOrderMap = <int, KitchenListOrder>{
+        for (var o in currentServerPending) o.orderId: o
+      };
+      final serverOrderIds = serverOrderMap.keys.toSet();
+      final localOrderIds = _pendingOrders.map((o) => o.orderId).toSet();
+
+      // 2. Identify changes
+      final newOrderIds = serverOrderIds.difference(localOrderIds);
+      final removedOrderIds = localOrderIds.difference(serverOrderIds);
+
+      bool changed = false;
+      List<KitchenListOrder> updatedPendingList = List.from(_pendingOrders);
+
+      // 3. Remove completed/cancelled orders
+      if (removedOrderIds.isNotEmpty) {
+        print("WS Update: Removing orders: $removedOrderIds");
+        updatedPendingList
+            .removeWhere((o) => removedOrderIds.contains(o.orderId));
+        final removedSessionIds = _pendingOrders
+            .where((o) => removedOrderIds.contains(o.orderId))
+            .map((o) => o.sessionId)
+            .toSet();
+        _tableNumberCache.removeWhere(
+            (sessionId, _) => removedSessionIds.contains(sessionId));
+        _fetchingTableSessionIds
+            .removeWhere((sessionId) => removedSessionIds.contains(sessionId));
+        _inProgressOrderIds.removeAll(removedOrderIds);
+        changed = true;
+      }
+
+      // 4. Add new orders (fetch details & table# only for these)
+      if (newOrderIds.isNotEmpty) {
+        print("WS Update: Adding new orders: $newOrderIds");
+        List<KitchenListOrder> newOrders = [];
+        for (int newId in newOrderIds) {
+          KitchenListOrder? newOrderData = serverOrderMap[newId];
+          if (newOrderData != null) {
+            newOrders.add(newOrderData);
+            // *** FIX: Use the correct variable 'inProgressFetched' ***
+            if (inProgressFetched
+                .any((ip) => ip.orderId == newOrderData.orderId)) {
+              print("WS Update: Marking new order $newId as in progress.");
+              _inProgressOrderIds.add(newId);
+            }
+          }
+        }
+        if (newOrders.isNotEmpty) {
           print(
-              "Kitchen: Error calling onOrderUpdate callback during error handling: $e");
+              "WS Update: Fetching table numbers for ${newOrders.length} new orders...");
+          List<KitchenListOrder> newOrdersWithTables =
+              await _fetchTableNumbersForOrders(newOrders);
+          if (mounted) {
+            updatedPendingList.addAll(newOrdersWithTables);
+            changed = true;
+          }
         }
+      }
+
+      // 5. Update state if changes occurred
+      if (changed && mounted) {
+        print("WS Update: Applying changes to state.");
+        updatedPendingList
+            .sort((a, b) => a.orderTime.compareTo(b.orderTime)); // Re-sort
+        _pendingOrders =
+            updatedPendingList; // Update notifier -> triggers listener -> updates filter & UI via setState
+
+        Map<int, int> counts = {};
+        for (var order in _pendingOrders) {
+          if (order.tableNumber != null &&
+              order.tableNumber! > 0 &&
+              order.tableNumber! != -1) {
+            counts[order.tableNumber!] = (counts[order.tableNumber!] ?? 0) + 1;
+          }
+        }
+        try {
+          widget.onOrderUpdate?.call(counts);
+        } catch (e) {
+          print("WS Update: Err call onOrderUpdate: $e");
+        }
+      } else {
+        print("WS Update: No changes detected.");
       }
     } finally {
       if (mounted) {
         setState(() {
-          _pendingOrders = finalOrders; // This now updates the notifier
-          _pendingErrorMessage = errorMsg;
-          _isLoadingPending = false;
+          _isHandlingWebSocketUpdate = false;
+        }); // Release flag
+      } else {
+        _isHandlingWebSocketUpdate = false;
+      }
+    }
+  }
+
+  // --- OPTIMIZED Data Fetching Methods ---
+  Future<void> _fetchPendingOrders({bool forceRefresh = false}) async {
+    if (_isLoadingPending && !forceRefresh) return;
+    if (!mounted) return;
+    if (forceRefresh) {
+      print("Kitchen: Force refresh pending.");
+      final ids = _pendingOrders.map((o) => o.sessionId).toSet();
+      _tableNumberCache.removeWhere((sId, _) => ids.contains(sId));
+      _fetchingTableSessionIds.removeWhere((sId) => ids.contains(sId));
+    }
+    bool isInitialLoad = _pendingOrders.isEmpty;
+    setState(() {
+      if (isInitialLoad) _isLoadingPending = true;
+      _isBackgroundLoading = true;
+      _pendingErrorMessage = null;
+      if (forceRefresh) _inProgressOrderIds.clear();
+    });
+    List<KitchenListOrder> initialOrders = [];
+    String? errorMsg;
+    bool initialFetchSuccess = false;
+    List<KitchenListOrder> inProgressFetched =
+        []; // Keep track of in-progress orders fetched
+    try {
+      print("Kitchen: Fetching basic pending orders...");
+      final r = await Future.wait([
+        _fetchOrdersWithStatus('ordered'),
+        _fetchOrdersWithStatus('in_progress')
+      ], eagerError: true);
+      if (!mounted) return;
+      final o = r[0];
+      final i = r[1];
+      inProgressFetched = i;
+      List<KitchenListOrder> c = [...o, ...i];
+      final m = <int, KitchenListOrder>{
+        for (var order in c) order.orderId: order
+      };
+      initialOrders = m.values.toList()
+        ..sort((a, b) => a.orderTime.compareTo(b.orderTime));
+      _inProgressOrderIds.clear();
+      for (var order in initialOrders) {
+        if (i.any((ip) => ip.orderId == order.orderId)) {
+          _inProgressOrderIds.add(order.orderId);
+        }
+      }
+      initialFetchSuccess = true;
+      print("Kitchen: Basic pending orders fetched: ${initialOrders.length}");
+    } catch (e) {
+      errorMsg = "Lỗi tải danh sách đơn: $e";
+      print("Kitchen: Err fetch PENDING (basic): $e");
+      initialOrders = [];
+    }
+
+    if (mounted) {
+      _pendingOrders = initialOrders;
+      _pendingErrorMessage = errorMsg;
+      _isLoadingPending = false;
+      _updateFilteredLists();
+      setState(() {});
+      print("Kitchen: Initial pending list rendered.");
+    }
+
+    if (mounted && initialFetchSuccess && initialOrders.isNotEmpty) {
+      print("Kitchen: Starting background table# fetch...");
+      Future.delayed(Duration.zero,
+          () => _fetchAndProcessTableNumbers(List.from(initialOrders)));
+    } else {
+      if (mounted) {
+        setState(() {
+          _isBackgroundLoading = false;
         });
-        print(
-            "Kitchen: Finished fetching pending orders. Count: ${finalOrders.length}");
+        try {
+          widget.onOrderUpdate?.call({});
+        } catch (e) {
+          print("Err call onOrderUpdate (init fail): $e");
+        }
+      }
+    }
+  }
+
+  Future<void> _fetchAndProcessTableNumbers(
+      List<KitchenListOrder> orders) async {
+    try {
+      print(
+          "Kitchen: Starting background table# fetch for ${orders.length} orders.");
+      await _fetchTableNumbersForOrders(orders);
+      if (!mounted) return;
+      Map<int, int> counts = {};
+      for (var order in _pendingOrdersNotifier.value) {
+        if (order.tableNumber != null &&
+            order.tableNumber! > 0 &&
+            order.tableNumber! != -1) {
+          counts[order.tableNumber!] = (counts[order.tableNumber!] ?? 0) + 1;
+        }
+      }
+      print("Kitchen: Background table# fetched. Updated counts: $counts");
+      try {
+        widget.onOrderUpdate?.call(counts);
+      } catch (e) {
+        print("Kitchen: Error calling onOrderUpdate after table fetch: $e");
+      }
+      if (mounted) {
+        setState(() {
+          _isBackgroundLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Kitchen: Error during background table# fetch/update: $e");
+      if (mounted) {
+        setState(() {
+          _isBackgroundLoading = false;
+        });
       }
     }
   }
@@ -2015,79 +2505,82 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     if (_isLoadingCompleted && !forceRefresh) return;
     if (!mounted) return;
     if (forceRefresh) {
-      print("Kitchen: Force refreshing completed orders.");
-      final completedSessionIds =
-          _completedOrders.map((o) => o.sessionId).toSet();
-      _tableNumberCache.removeWhere(
-          (sessionId, _) => completedSessionIds.contains(sessionId));
-      _fetchingTableSessionIds
-          .removeWhere((sessionId) => completedSessionIds.contains(sessionId));
+      print("Kitchen: Force refresh completed.");
+      final ids = _completedOrders.map((o) => o.sessionId).toSet();
+      _tableNumberCache.removeWhere((sId, _) => ids.contains(sId));
+      _fetchingTableSessionIds.removeWhere((sId) => ids.contains(sId));
     }
+    bool isInitialLoad = _completedOrders.isEmpty;
     setState(() {
       _isLoadingCompleted = true;
+      _isBackgroundLoading = true;
       _completedErrorMessage = null;
     });
-    List<KitchenListOrder> finalOrders = [];
+    List<KitchenListOrder> initialOrders = [];
     String? errorMsg;
+    bool initialFetchSuccess = false;
     try {
-      final servedOrders = await _fetchOrdersWithStatus('served');
-      final ordersWithTableNumbers =
-          await _fetchTableNumbersForOrders(servedOrders);
-      ordersWithTableNumbers.sort((a, b) => b.orderTime.compareTo(a.orderTime));
-      finalOrders = ordersWithTableNumbers;
-      _completedOrdersLoaded = true;
+      print("Kitchen: Fetching basic completed orders...");
+      final served = await _fetchOrdersWithStatus('served');
+      if (!mounted) return;
+      initialOrders = served
+        ..sort((a, b) => b.orderTime.compareTo(a.orderTime));
+      initialFetchSuccess = true;
+      print("Kitchen: Basic completed orders fetched: ${initialOrders.length}");
     } catch (e) {
-      errorMsg = "Lỗi tải đơn đã hoàn thành: ${e.toString()}";
-      print("Kitchen: Error fetching COMPLETED orders: $e");
-    } finally {
-      if (mounted) {
-        setState(() {
-          _completedOrders = finalOrders;
-          _completedErrorMessage = errorMsg;
-          _isLoadingCompleted = false;
-        });
-        print(
-            "Kitchen: Finished fetching completed orders. Count: ${finalOrders.length}");
-      }
+      errorMsg = "Lỗi tải đơn hoàn thành: $e";
+      print("Kitchen: Err fetch COMPLETED (basic): $e");
+      initialOrders = [];
+    }
+    if (mounted) {
+      _completedOrders = initialOrders;
+      _completedErrorMessage = errorMsg;
+      _isLoadingCompleted = false;
+      _completedOrdersLoaded = true;
+      _updateFilteredLists();
+      setState(() {});
+      print("Kitchen: Initial completed list rendered.");
+    }
+    if (mounted && initialFetchSuccess && initialOrders.isNotEmpty) {
+      Future.delayed(Duration.zero,
+          () => _fetchAndProcessTableNumbers(List.from(initialOrders)));
+    } else if (mounted) {
+      setState(() {
+        _isBackgroundLoading = false;
+      });
     }
   }
 
   Future<List<KitchenListOrder>> _fetchOrdersWithStatus(String status) async {
-    final baseUrl =
-        'https://soa-deploy.up.railway.app/kitchen/get-orders-by-status/';
-    final url = Uri.parse('$baseUrl$status');
-    print("Kitchen API: Fetching orders with status '$status': $url");
+    final u = Uri.parse(
+        'https://soa-deploy.up.railway.app/kitchen/get-orders-by-status/$status');
+    print("API: Fetch $status: $u");
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final r = await http.get(u).timeout(const Duration(seconds: 15));
       if (!mounted) return [];
-      if (response.statusCode == 200) {
-        final List<dynamic> decodedData =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        return decodedData
-            .map((orderData) =>
-                KitchenListOrder.fromJson(orderData as Map<String, dynamic>))
+      if (r.statusCode == 200) {
+        final List<dynamic> d = jsonDecode(utf8.decode(r.bodyBytes));
+        return d
+            .map((o) => KitchenListOrder.fromJson(o as Map<String, dynamic>))
             .toList();
       } else {
-        String errorBody = response.body;
+        String b = r.body;
         try {
-          errorBody = utf8.decode(response.bodyBytes);
+          b = utf8.decode(r.bodyBytes);
         } catch (_) {}
-        print(
-            "Kitchen API: Error fetching orders with status '$status': ${response.statusCode}, Body: $errorBody");
-        throw Exception(
-            'Failed to load orders (status $status): ${response.statusCode}');
+        print("API: Err $status: ${r.statusCode}, Body: $b");
+        throw Exception('Fail load $status: ${r.statusCode}');
       }
     } catch (e) {
-      print(
-          "Kitchen API: Network/Timeout Error fetching orders with status '$status': $e");
-      throw Exception('Network error fetching orders (status $status)');
+      print("API: Net/Timeout Err $status: $e");
+      throw Exception('Net err $status');
     }
   }
 
   Future<int?> _fetchTableNumber(int sessionId) async {
     if (_tableNumberCache.containsKey(sessionId)) {
-      final cachedValue = _tableNumberCache[sessionId];
-      return cachedValue == -1 ? null : cachedValue;
+      final v = _tableNumberCache[sessionId];
+      return v == -1 ? null : v;
     }
     if (_fetchingTableSessionIds.contains(sessionId)) {
       return null;
@@ -2096,276 +2589,172 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     _fetchingTableSessionIds.add(sessionId);
     final url = Uri.parse(
         'https://soa-deploy.up.railway.app/order/session/$sessionId/table-number');
-    int? resultTableNumber;
-    int cacheValue = -1;
+    int? res;
+    int cacheVal = -1;
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      final r = await http.get(url).timeout(const Duration(seconds: 8));
       if (!mounted) {
         _fetchingTableSessionIds.remove(sessionId);
         return null;
       }
-      if (response.statusCode == 200) {
-        final decodedData = jsonDecode(utf8.decode(response.bodyBytes));
-        dynamic tableNumberData;
-        if (decodedData is Map && decodedData.containsKey('table_number')) {
-          tableNumberData = decodedData['table_number'];
-        } else if (decodedData is int || decodedData is String) {
-          tableNumberData = decodedData;
-        }
-        if (tableNumberData is int) {
-          resultTableNumber = tableNumberData;
-        } else if (tableNumberData is String) {
-          resultTableNumber = int.tryParse(tableNumberData);
-        }
-        if (resultTableNumber != null && resultTableNumber > 0) {
-          cacheValue = resultTableNumber;
-        } else {
-          print(
-              "Warning: Could not parse a valid table number for session $sessionId from data: $tableNumberData");
-          resultTableNumber = null;
-          cacheValue = -1;
+      if (r.statusCode == 200) {
+        final d = jsonDecode(utf8.decode(r.bodyBytes));
+        dynamic t;
+        if (d is Map && d.containsKey('table_number'))
+          t = d['table_number'];
+        else if (d is int || d is String) t = d;
+        if (t is int)
+          res = t;
+        else if (t is String) res = int.tryParse(t);
+        if (res != null && res > 0)
+          cacheVal = res;
+        else {
+          res = null;
+          cacheVal = -1;
         }
       } else {
-        print(
-            "Error fetching table number for session $sessionId: ${response.statusCode}, Body: ${response.body}");
-        resultTableNumber = null;
-        cacheValue = -1;
+        res = null;
+        cacheVal = -1;
       }
     } catch (e) {
-      print("Exception fetching table number for session $sessionId: $e");
-      resultTableNumber = null;
-      cacheValue = -1;
+      print("Exc fetch table# $sessionId: $e");
+      res = null;
+      cacheVal = -1;
       if (!mounted) {
         _fetchingTableSessionIds.remove(sessionId);
         return null;
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _tableNumberCache[sessionId] = cacheValue;
-          _fetchingTableSessionIds.remove(sessionId);
-        });
-      } else {
-        _tableNumberCache[sessionId] = cacheValue;
-        _fetchingTableSessionIds.remove(sessionId);
-      }
+      _tableNumberCache[sessionId] = cacheVal;
+      _fetchingTableSessionIds.remove(sessionId);
     }
-    return resultTableNumber;
+    return res;
   }
 
   Future<List<KitchenListOrder>> _fetchTableNumbersForOrders(
       List<KitchenListOrder> orders) async {
-    if (orders.isEmpty || !mounted) return [];
-    final List<Future<void>> fetchFutures = [];
-    final Set<int> sessionIdsToFetch = {};
-    for (var order in orders) {
-      if (!_tableNumberCache.containsKey(order.sessionId) &&
-          !_fetchingTableSessionIds.contains(order.sessionId)) {
-        sessionIdsToFetch.add(order.sessionId);
+    if (orders.isEmpty) return orders;
+    final List<Future<void>> fut = [];
+    final Set<int> needed = {};
+    for (var o in orders) {
+      if (!_tableNumberCache.containsKey(o.sessionId) &&
+          !_fetchingTableSessionIds.contains(o.sessionId)) {
+        needed.add(o.sessionId);
       }
     }
-    for (int sessionId in sessionIdsToFetch) {
-      fetchFutures.add(_fetchTableNumber(sessionId));
-    }
-    if (fetchFutures.isNotEmpty) {
+    if (needed.isNotEmpty) {
+      print("Need fetch table# for: $needed");
+      for (int sId in needed) {
+        fut.add(_fetchTableNumber(sId));
+      }
       try {
-        await Future.wait(fetchFutures);
+        await Future.wait(fut);
+        print("Done Future.wait table#");
       } catch (e) {
-        print("Error occurred during Future.wait for table numbers: $e");
+        print("Err Future.wait table#: $e");
       }
     }
-    if (!mounted) return [];
-    List<KitchenListOrder> updatedOrders = [];
-    for (var order in orders) {
-      final cachedTableNum = _tableNumberCache[order.sessionId];
-      if (cachedTableNum != null && order.tableNumber != cachedTableNum) {
-        order.tableNumber = cachedTableNum;
+    if (!mounted) return orders;
+    List<KitchenListOrder> updated = orders.map((o) {
+      final c = _tableNumberCache[o.sessionId];
+      if (o.tableNumber != c) {
+        o.tableNumber = c;
       }
-      updatedOrders.add(order);
-    }
-    return updatedOrders;
+      return o;
+    }).toList();
+    return updated;
   }
-
-  // Trong class _KitchenOrderListScreenState
 
   Future<void> _fetchOrderDetail(
       int orderId, StateSetter setDialogState) async {
-    // Kiểm tra xem Widget chính và Dialog có còn được mount không
     if (!mounted) return;
-    bool isDialogMounted = true;
-    // Sử dụng context được truyền vào từ StatefulBuilder của Dialog
-    // Nếu không có context hợp lệ, không tiếp tục
-    try {
-      (context as Element).widget; // Một cách để kiểm tra context hợp lệ
-    } catch (e) {
-      isDialogMounted = false;
-    }
-    if (!isDialogMounted) {
-      print(
-          "Order detail fetch cancelled: Dialog is no longer mounted for Order $orderId.");
-      return;
-    }
-
-    // --- Bắt đầu trạng thái loading trong Dialog ---
     try {
       setDialogState(() {
         _isDetailLoading = true;
         _detailErrorMessage = null;
-        _detailItems = []; // Xóa dữ liệu cũ
+        _detailItems = [];
         _updatingItemIds.clear();
         _isCompletingAll = false;
       });
     } catch (e) {
-      // Xử lý trường hợp không thể cập nhật state của dialog (có thể do dialog đóng quá nhanh)
-      print("Error setting dialog state for loading (Order $orderId): $e");
-      // Đảm bảo các cờ loading được reset nếu có lỗi
+      print("Err set dialog load state $orderId: $e");
       _isDetailLoading = false;
       _detailItems = [];
-      return; // Không tiếp tục nếu không set state được
+      return;
     }
-
-    // --- Gọi API ---
     final url = Uri.parse(
         'https://soa-deploy.up.railway.app/kitchen/order/$orderId/items');
-    print('Fetching order detail: ${url.toString()}');
-
+    print('Fetch detail: $url');
     try {
-      // ***** GIẢM TIMEOUT *****
-      final response = await http
-          .get(url)
-          .timeout(const Duration(seconds: 8)); // Giảm còn 8 giây
-
-      // Kiểm tra lại mount status *sau khi* await
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
       if (!mounted) return;
-      isDialogMounted = true;
-      try {
-        (context as Element).widget;
-      } catch (e) {
-        isDialogMounted = false;
-      }
-      if (!isDialogMounted) {
-        print(
-            "Order detail fetch cancelled after API call: Dialog no longer mounted for Order $orderId.");
-        return;
-      }
-
-      // --- Xử lý Response ---
       if (response.statusCode == 200) {
-        // Thành công
-        final List<dynamic> decodedData =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        final List<KitchenOrderDetailItem> fetchedItems = decodedData
-            .map((jsonItem) => KitchenOrderDetailItem.fromJson(
-                jsonItem as Map<String, dynamic>))
+        final List<dynamic> d = jsonDecode(utf8.decode(response.bodyBytes));
+        final List<KitchenOrderDetailItem> f = d
+            .map((i) =>
+                KitchenOrderDetailItem.fromJson(i as Map<String, dynamic>))
             .toList();
-
-        // Cập nhật state của Dialog với dữ liệu mới
         try {
           setDialogState(() {
-            _detailItems = fetchedItems;
+            _detailItems = f;
             _isDetailLoading = false;
           });
         } catch (e) {
-          // Fallback nếu set state dialog lỗi
-          print("Error setting dialog state with data (Order $orderId): $e");
-          _detailItems = fetchedItems;
+          print("Err set dialog data state $orderId: $e");
+          _detailItems = f;
           _isDetailLoading = false;
         }
       } else {
-        // Lỗi từ Server (không phải 200 OK)
-        print(
-            "Error fetching order detail for $orderId: ${response.statusCode}");
-        final errorBody = utf8.decode(response.bodyBytes); // Đọc body lỗi
-        String serverErrorMsg = '';
+        print("Err fetch detail $orderId: ${response.statusCode}");
+        final b = utf8.decode(response.bodyBytes);
+        String s = '';
         try {
-          // Thử decode JSON để lấy thông tin chi tiết lỗi từ server (nếu có)
-          final decodedError = jsonDecode(errorBody);
-          if (decodedError is Map && decodedError.containsKey('detail')) {
-            serverErrorMsg =
-                ': ${decodedError['detail']}'; // Thêm chi tiết lỗi nếu có key 'detail'
+          final de = jsonDecode(b);
+          if (de is Map && de.containsKey('detail')) {
+            s = ': ${de['detail']}';
           }
-        } catch (_) {
-          // Bỏ qua nếu body không phải JSON hợp lệ
-          print(
-              "Server error response body is not valid JSON or doesn't contain 'detail'. Body: $errorBody");
-        }
-
-        // Cập nhật state Dialog với thông báo lỗi
+        } catch (_) {}
         try {
           setDialogState(() {
-            _detailErrorMessage =
-                'Lỗi tải chi tiết (${response.statusCode})$serverErrorMsg';
+            _detailErrorMessage = 'Lỗi tải chi tiết (${response.statusCode})$s';
             _isDetailLoading = false;
           });
         } catch (e) {
-          print(
-              "Error setting dialog state with server error (Order $orderId): $e");
-          _detailErrorMessage =
-              'Lỗi tải chi tiết (${response.statusCode})$serverErrorMsg';
+          print("Err set dialog server err state $orderId: $e");
+          _detailErrorMessage = 'Lỗi tải chi tiết (${response.statusCode})$s';
           _isDetailLoading = false;
         }
       }
-      // ***** XỬ LÝ TIMEOUT CỤ THỂ *****
     } on TimeoutException catch (e) {
-      print("Timeout Error fetching order detail for order $orderId: $e");
-      // Kiểm tra mount lại sau khi bắt exception
+      print("Timeout fetch detail $orderId: $e");
       if (!mounted) return;
-      isDialogMounted = true;
-      try {
-        (context as Element).widget;
-      } catch (e) {
-        isDialogMounted = false;
-      }
-      if (!isDialogMounted) return;
-
-      // Cập nhật state Dialog với thông báo lỗi Timeout
       try {
         setDialogState(() {
-          _detailErrorMessage =
-              'Yêu cầu quá thời gian quy định (8 giây). Vui lòng thử lại.';
+          _detailErrorMessage = 'Yêu cầu quá thời gian (8 giây).';
           _isDetailLoading = false;
         });
       } catch (se) {
-        // Fallback
-        print(
-            "Error setting dialog state with timeout error (Order $orderId): $se");
-        _detailErrorMessage =
-            'Yêu cầu quá thời gian quy định (8 giây). Vui lòng thử lại.';
+        print("Err set dialog timeout err state $orderId: $se");
+        _detailErrorMessage = 'Yêu cầu quá thời gian (8 giây).';
         _isDetailLoading = false;
       }
     } catch (e) {
-      // Xử lý các lỗi khác (mạng, parsing JSON, ...)
-      print("Network/Other Error fetching order detail for order $orderId: $e");
-      // Kiểm tra mount lại sau khi bắt exception
+      print("Net/Other Err fetch detail $orderId: $e");
       if (!mounted) return;
-      isDialogMounted = true;
-      try {
-        (context as Element).widget;
-      } catch (e) {
-        isDialogMounted = false;
-      }
-      if (!isDialogMounted) return;
-
-      // Cập nhật state Dialog với thông báo lỗi chung
       try {
         setDialogState(() {
-          _detailErrorMessage =
-              'Lỗi kết nối hoặc xử lý dữ liệu. Vui lòng thử lại.';
+          _detailErrorMessage = 'Lỗi kết nối/xử lý dữ liệu.';
           _isDetailLoading = false;
         });
       } catch (se) {
-        // Fallback
-        print(
-            "Error setting dialog state with catch error (Order $orderId): $se");
-        _detailErrorMessage =
-            'Lỗi kết nối hoặc xử lý dữ liệu. Vui lòng thử lại.';
+        print("Err set dialog catch err state $orderId: $se");
+        _detailErrorMessage = 'Lỗi kết nối/xử lý dữ liệu.';
         _isDetailLoading = false;
       }
     }
   }
 
   // --- Popup & Order Management Methods ---
-
   void _showOrderDetailPopup(BuildContext context, KitchenListOrder order) {
     final theme = Theme.of(context);
     _isDetailLoading = false;
@@ -2377,24 +2766,22 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
         context: context,
         barrierDismissible: !_isCompletingAll,
         builder: (BuildContext dialogContext) {
-          // ***** IMPORTANT: Use dialogContext consistently inside builder *****
           return StatefulBuilder(builder: (context, setDialogState) {
-            // Use 'context' from builder here
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              bool shouldFetch = mounted &&
+              bool f = mounted &&
                   (ModalRoute.of(dialogContext)?.isCurrent ?? false) &&
                   _detailItems.isEmpty &&
                   !_isDetailLoading &&
                   _detailErrorMessage == null;
-              if (shouldFetch) {
+              if (f) {
                 _fetchOrderDetail(order.orderId, setDialogState);
               }
             });
-            bool canCompleteAll = _detailItems
-                    .any((item) => item.status.toLowerCase() != 'served') &&
-                !_isDetailLoading &&
-                !_isCompletingAll &&
-                _updatingItemIds.isEmpty;
+            bool canCompleteAll =
+                _detailItems.any((i) => i.status.toLowerCase() != 'served') &&
+                    !_isDetailLoading &&
+                    !_isCompletingAll &&
+                    _updatingItemIds.isEmpty;
             return AlertDialog(
               titlePadding: const EdgeInsets.fromLTRB(16.0, 16.0, 8.0, 10.0),
               title: Row(
@@ -2424,9 +2811,9 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                           icon: Icon(Icons.done_all,
                               color: canCompleteAll
                                   ? theme.colorScheme.secondary
-                                  : Colors.grey[600],
+                                  : theme.disabledColor,
                               size: 24),
-                          tooltip: 'Hoàn thành tất cả món chưa phục vụ',
+                          tooltip: 'Hoàn thành tất cả',
                           onPressed: !canCompleteAll
                               ? null
                               : () => _completeAllItemsForOrder(
@@ -2438,7 +2825,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                         icon: Icon(Icons.refresh,
                             color: theme.colorScheme.secondary.withOpacity(0.8),
                             size: 22),
-                        tooltip: 'Tải lại chi tiết đơn',
+                        tooltip: 'Tải lại',
                         onPressed: _isDetailLoading ||
                                 _updatingItemIds.isNotEmpty ||
                                 _isCompletingAll
@@ -2454,7 +2841,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
               content: _buildPopupContent(theme, setDialogState, order,
-                  _isCompletingAll, dialogContext), // Pass dialogContext
+                  _isCompletingAll, dialogContext),
               actionsPadding:
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               actions: [
@@ -2465,7 +2852,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                   child: Text('Đóng',
                       style: TextStyle(
                           color: _updatingItemIds.isNotEmpty || _isCompletingAll
-                              ? Colors.grey
+                              ? theme.disabledColor
                               : theme.colorScheme.secondary)),
                 ),
               ],
@@ -2479,200 +2866,133 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
       _isDetailLoading = false;
       _detailErrorMessage = null;
       _isCompletingAll = false;
-      print(
-          "Order detail dialog closed for #${order.orderId}. Local popup state reset.");
+      print("Detail dialog closed #${order.orderId}");
     });
   }
 
-  // Trong class _KitchenOrderListScreenState
-
-  // ***** MODIFIED: Use ValueListenableBuilder for auto-closing table orders list *****
   void showOrdersForTable(BuildContext parentContext, int tableNumber) {
     final theme = Theme.of(parentContext);
-    print("Showing popup for table $tableNumber.");
-
-    // Biến để lưu trữ tham chiếu đến listener, giúp việc remove dễ dàng hơn
-    VoidCallback? _listenerRef;
-
+    print("Show popup table $tableNumber.");
     showDialog(
       context: parentContext,
       builder: (BuildContext dialogContext) {
-        return StatefulBuilder(builder: (context, setStateInDialog) {
-          // --- Listener Function ---
-          _listenerRef = () {
-            // Kiểm tra dialog còn tồn tại và màn hình chính còn mounted không
-            if (!mounted ||
-                !(ModalRoute.of(dialogContext)?.isCurrent ?? false)) {
-              if (_listenerRef != null) {
-                _pendingOrdersNotifier.removeListener(_listenerRef!);
-                print(
-                    "Listener removed because dialog/screen is no longer active.");
-              }
-              return;
-            }
-
-            // Lấy danh sách pending mới nhất
-            final currentPendingOrders = _pendingOrdersNotifier.value;
-            // Kiểm tra xem còn đơn nào cho bàn này không
-            bool stillHasOrdersForThisTable = currentPendingOrders
-                .any((order) => order.tableNumber == tableNumber);
-
-            if (!stillHasOrdersForThisTable) {
-              // Nếu không còn đơn nào -> Đóng dialog
-              print(
-                  "Table $tableNumber list popup: No more pending orders found. Closing.");
-              if (_listenerRef != null) {
-                _pendingOrdersNotifier.removeListener(_listenerRef!);
-              }
-              // Đóng dialog một cách an toàn sau khi build frame hiện tại hoàn tất
+        return ValueListenableBuilder<List<KitchenListOrder>>(
+          valueListenable: _pendingOrdersNotifier,
+          builder: (context, currentPendingOrders, child) {
+            final ordersForTable = currentPendingOrders
+                .where((o) => o.tableNumber == tableNumber)
+                .toList()
+              ..sort((a, b) => a.orderTime.compareTo(b.orderTime));
+            if (ordersForTable.isEmpty && Navigator.canPop(dialogContext)) {
+              print("Table $tableNumber list popup: Auto-closing.");
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (Navigator.canPop(dialogContext)) {
                   Navigator.of(dialogContext).pop();
                 }
               });
-            } else {
-              // Nếu vẫn còn đơn -> Cập nhật UI của dialog (nếu cần)
-              print(
-                  "Table $tableNumber list popup: Orders updated, still pending orders remaining.");
-              // Gọi setState của StatefulBuilder để rebuild dialog
-              if (mounted &&
-                  (ModalRoute.of(dialogContext)?.isCurrent ?? false)) {
-                setStateInDialog(() {});
-              }
+              return const SizedBox.shrink();
             }
-          };
-          // --- End Listener Function ---
-
-          // --- Add Listener after build ---
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Chỉ thêm listener nếu nó chưa được thêm (tránh thêm nhiều lần khi rebuild)
-            // Remove listener cũ trước khi thêm mới để đảm bảo chỉ có 1 listener active
-            if (_listenerRef != null) {
-              _pendingOrdersNotifier.removeListener(
-                  _listenerRef!); // Remove potential previous one
-              _pendingOrdersNotifier
-                  .addListener(_listenerRef!); // Add the current one
-              print("Listener added for table $tableNumber dialog.");
-            }
-          });
-          // --- End Add Listener ---
-
-          // Lọc danh sách đơn hàng cho bàn này (luôn lấy từ notifier)
-          final ordersForTable = _pendingOrdersNotifier.value
-              .where((order) => order.tableNumber == tableNumber)
-              .toList();
-          ordersForTable.sort((a, b) => a.orderTime.compareTo(b.orderTime));
-
-          // --- Dialog UI ---
-          return WillPopScope(
-            onWillPop: () async {
-              print(
-                  "Table $tableNumber list popup: Manually closing. Removing listener.");
-              if (_listenerRef != null) {
-                _pendingOrdersNotifier.removeListener(_listenerRef!);
-              }
-              return true; // Allow pop
-            },
-            child: AlertDialog(
-              title: Text('Đơn hàng Bàn $tableNumber (Đang chờ)'),
-              content: Container(
-                width: double.maxFinite,
-                constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(dialogContext).size.height * 0.5),
-                child: ordersForTable.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(kDefaultPadding),
-                          child: Text(
-                            'Không còn đơn hàng nào đang chờ xử lý cho bàn này.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.7)),
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: ordersForTable.length,
-                        itemBuilder: (context, index) {
-                          final order = ordersForTable[index];
-                          final formattedTime = DateFormat('HH:mm - dd/MM/yy')
-                              .format(order.orderTime);
-                          final bool showInProgressIcon =
-                              _inProgressOrderIds.contains(order.orderId);
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                                vertical: kDefaultPadding * 0.6),
-                            color: theme.cardTheme.color?.withOpacity(0.9),
-                            child: ListTile(
-                              leading: Icon(Icons.receipt_long,
-                                  color: theme.colorScheme.secondary
-                                      .withOpacity(0.8)),
-                              title: Row(
-                                children: [
-                                  if (showInProgressIcon)
-                                    Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 6),
-                                        child: Icon(Icons.hourglass_top_rounded,
-                                            color: Colors.yellowAccent[700],
-                                            size: 16)),
-                                  Flexible(
-                                      child: Text('Đơn #${order.orderId}')),
-                                ],
-                              ),
-                              subtitle: Text('TG: $formattedTime'),
-                              trailing: const Icon(Icons.arrow_forward_ios,
-                                  size: 16, color: Colors.white70),
-                              onTap: () {
-                                // Gọi popup chi tiết từ context gốc (parentContext)
-                                _showOrderDetailPopup(parentContext, order);
-                              },
-                              dense: true,
+            return WillPopScope(
+              onWillPop: () async {
+                print("Table $tableNumber list popup: Manually closing.");
+                return true;
+              },
+              child: AlertDialog(
+                title: Text('Đơn hàng Bàn $tableNumber (Chờ)',
+                    style: theme.dialogTheme.titleTextStyle),
+                content: Container(
+                  width: double.maxFinite,
+                  constraints: BoxConstraints(
+                      maxHeight:
+                          MediaQuery.of(dialogContext).size.height * 0.5),
+                  child: ordersForTable.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(kDefaultPadding),
+                            child: Text(
+                              'Không còn đơn hàng nào đang chờ.',
+                              style: (theme.textTheme.bodyMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7)),
+                              textAlign: TextAlign.center,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: ordersForTable.length,
+                          itemBuilder: (context, index) {
+                            final order = ordersForTable[index];
+                            final fmtTime = DateFormat('HH:mm - dd/MM/yy')
+                                .format(order.orderTime);
+                            final bool showIP =
+                                _inProgressOrderIds.contains(order.orderId);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: kDefaultPadding * 0.6),
+                              color: theme.cardTheme.color?.withOpacity(0.9),
+                              child: ListTile(
+                                leading: Icon(Icons.receipt_long,
+                                    color: theme.colorScheme.secondary
+                                        .withOpacity(0.8)),
+                                title: Row(
+                                  children: [
+                                    if (showIP)
+                                      Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 6),
+                                          child: Icon(
+                                              Icons.hourglass_top_rounded,
+                                              color: Colors.yellowAccent[700],
+                                              size: 16)),
+                                    Flexible(
+                                        child: Text('Đơn #${order.orderId}')),
+                                  ],
+                                ),
+                                subtitle: Text('TG: $fmtTime'),
+                                trailing: Icon(Icons.arrow_forward_ios,
+                                    size: 16,
+                                    color: theme.iconTheme.color
+                                        ?.withOpacity(0.7)),
+                                onTap: () {
+                                  _showOrderDetailPopup(parentContext, order);
+                                },
+                                dense: true,
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                actions: [
+                  TextButton.icon(
+                    icon: Icon(Icons.refresh,
+                        size: 16,
+                        color: theme.colorScheme.secondary.withOpacity(0.8)),
+                    label: Text('Làm mới DS',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                theme.colorScheme.secondary.withOpacity(0.8))),
+                    onPressed: () {
+                      _fetchPendingOrders(forceRefresh: true);
+                    },
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: Text('Đóng',
+                        style: TextStyle(color: theme.colorScheme.secondary)),
+                  ),
+                ],
+                backgroundColor: theme.dialogTheme.backgroundColor,
+                shape: theme.dialogTheme.shape,
               ),
-              actions: [
-                TextButton.icon(
-                  icon: Icon(Icons.refresh,
-                      size: 16,
-                      color: theme.colorScheme.secondary.withOpacity(0.8)),
-                  label: Text('Làm mới DS',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.secondary.withOpacity(0.8))),
-                  onPressed: () {
-                    _fetchPendingOrders(forceRefresh: true);
-                  },
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (_listenerRef != null) {
-                      _pendingOrdersNotifier.removeListener(_listenerRef!);
-                    }
-                    Navigator.of(dialogContext).pop();
-                  },
-                  child: Text('Đóng',
-                      style: TextStyle(color: theme.colorScheme.secondary)),
-                ),
-              ],
-              backgroundColor: theme.dialogTheme.backgroundColor,
-              shape: theme.dialogTheme.shape,
-            ),
-          );
-          // --- End Dialog UI ---
-        });
+            );
+          },
+        );
       },
-    ).then((_) {
-      // Cleanup listener khi dialog bị đóng (ví dụ: nhấn nút back vật lý)
-      if (_listenerRef != null) {
-        _pendingOrdersNotifier.removeListener(_listenerRef!);
-        print("Listener removed after table $tableNumber dialog closed.");
-      }
-    });
+    );
   }
 
   Widget _buildPopupContent(
@@ -2690,7 +3010,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
             children: [
               CircularProgressIndicator(color: theme.colorScheme.secondary),
               const SizedBox(height: 15),
-              Text("Đang tải chi tiết...", style: theme.textTheme.bodySmall)
+              Text("Đang tải...", style: theme.textTheme.bodySmall)
             ],
           ));
     if (_detailErrorMessage != null)
@@ -2698,13 +3018,15 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
           padding: const EdgeInsets.all(kDefaultPadding * 2),
           alignment: Alignment.center,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.warning_amber_rounded,
-                color: Colors.orangeAccent, size: 40),
+            Icon(Icons.warning_amber_rounded,
+                color: theme.colorScheme.error, size: 40),
             const SizedBox(height: 10),
             Text(_detailErrorMessage!,
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: Colors.white70)),
+                style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                    .copyWith(
+                        color: theme.textTheme.bodyMedium?.color
+                            ?.withOpacity(0.7))),
             const SizedBox(height: 16),
             ElevatedButton.icon(
                 onPressed: () =>
@@ -2712,17 +3034,18 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                 icon: const Icon(Icons.refresh),
                 label: const Text('Thử lại'),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orangeAccent[700]))
+                    backgroundColor: theme.colorScheme.errorContainer,
+                    foregroundColor: theme.colorScheme.onErrorContainer))
           ]));
     if (_detailItems.isEmpty)
       return Container(
           height: 100,
           padding: const EdgeInsets.all(kDefaultPadding * 2),
           alignment: Alignment.center,
-          child: Text('Không có món ăn nào trong đơn hàng này.',
+          child: Text('Không có món ăn.',
               textAlign: TextAlign.center,
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: Colors.white60)));
+              style: (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6))));
     return Container(
         width: double.maxFinite,
         constraints:
@@ -2735,7 +3058,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
             itemBuilder: (context, index) {
               final item = _detailItems[index];
               final bool isServed = item.status.toLowerCase() == 'served';
-              final bool isThisItemUpdating =
+              final bool isThisUpdating =
                   _updatingItemIds.contains(item.orderItemId);
               return Opacity(
                   opacity: isServed ? 0.65 : 1.0,
@@ -2759,16 +3082,18 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                         CrossAxisAlignment.start,
                                     children: [
                                   Text('${item.name} (SL: ${item.quantity})',
-                                      style:
-                                          theme.textTheme.titleMedium?.copyWith(
+                                      style: (theme.textTheme.titleMedium ??
+                                              const TextStyle())
+                                          .copyWith(
                                         fontSize: 14.5,
                                         color: isServed
-                                            ? Colors.white.withOpacity(0.6)
-                                            : Colors.white,
+                                            ? theme.textTheme.bodySmall?.color
+                                            : theme
+                                                .textTheme.titleMedium?.color,
                                         decoration: isServed
                                             ? TextDecoration.lineThrough
                                             : null,
-                                        decorationColor: Colors.white54,
+                                        decorationColor: theme.dividerColor,
                                         decorationThickness: 1.5,
                                       ),
                                       maxLines: 2,
@@ -2780,8 +3105,9 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                         size: 14),
                                     const SizedBox(width: 4),
                                     Text(_getStatusText(item.status),
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
+                                        style: (theme.textTheme.bodySmall ??
+                                                const TextStyle())
+                                            .copyWith(
                                                 fontStyle: FontStyle.italic,
                                                 fontSize: 11,
                                                 color:
@@ -2794,7 +3120,7 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                 width: 85,
                                 height: 30,
                                 child: Center(
-                                    child: isThisItemUpdating
+                                    child: isThisUpdating
                                         ? const SizedBox(
                                             width: 24,
                                             height: 24,
@@ -2823,14 +3149,14 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                                                           BorderRadius.circular(
                                                               6)),
                                                   elevation: 2,
-                                                  disabledBackgroundColor:
-                                                      Colors.grey[600]
-                                                          ?.withOpacity(0.5),
+                                                  disabledBackgroundColor: theme
+                                                      .disabledColor
+                                                      .withOpacity(0.5),
                                                   disabledForegroundColor:
-                                                      Colors.grey[400],
+                                                      theme.disabledColor,
                                                 ),
                                                 onPressed: isCompletingAll ||
-                                                        isThisItemUpdating
+                                                        isThisUpdating
                                                     ? null
                                                     : () {
                                                         _updatePopupOrderItemStatus(
@@ -2846,151 +3172,62 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
             }));
   }
 
-  // Trong class _KitchenOrderListScreenState
-
-  // ***** MODIFIED: Gọi API Complete Order khi món cuối được phục vụ *****
   Future<void> _updatePopupOrderItemStatus(
       KitchenListOrder order,
       KitchenOrderDetailItem item,
       String newStatus,
       StateSetter setDialogState,
       BuildContext dialogContext) async {
-    // Ngăn chặn cập nhật trùng lặp hoặc khi widget/dialog không còn tồn tại
     if (_updatingItemIds.contains(item.orderItemId) || !mounted) return;
-    bool isDialogStillMounted = true;
     try {
-      (dialogContext as Element).widget;
+      setDialogState(() => _updatingItemIds.add(item.orderItemId));
     } catch (e) {
-      isDialogStillMounted = false;
-    }
-    if (!isDialogStillMounted) return;
-
-    // --- Bắt đầu trạng thái loading cho item cụ thể ---
-    try {
-      setDialogState(() {
-        _updatingItemIds.add(item.orderItemId);
-      });
-    } catch (e) {
-      print(
-          "Error setting dialog state update start (Item ${item.orderItemId}): $e");
-      _updatingItemIds.remove(item.orderItemId); // Clean up if error
+      print("Err set update start ${item.orderItemId}: $e");
       return;
     }
-
-    print(
-        "Attempting PATCH item status: Item ${item.orderItemId} -> Status '$newStatus'");
+    print("PATCH item ${item.orderItemId} -> '$newStatus'");
     final url = Uri.parse(
             'https://soa-deploy.up.railway.app/kitchen/order-items/${item.orderItemId}/status')
         .replace(queryParameters: {'status': newStatus});
     final headers = {'Content-Type': 'application/json'};
     bool success = false;
-
     try {
-      // Gọi API cập nhật trạng thái món ăn
       final response = await http
           .patch(url, headers: headers)
-          .timeout(const Duration(seconds: 10)); // Timeout cho từng món
-
-      // Kiểm tra lại mount status sau await
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
-      try {
-        (dialogContext as Element).widget;
-      } catch (e) {
-        isDialogStillMounted = false;
-      }
-
-      // Xử lý nếu dialog đóng trong khi chờ API nhưng API thành công
-      if (!isDialogStillMounted &&
-          response.statusCode >= 200 &&
-          response.statusCode < 300) {
-        print(
-            "Dialog closed after successful item update, state may not reflect immediately.");
-        // Có thể cần trigger refresh list chính nếu logic phức tạp hơn
-        _fetchPendingOrders(
-            forceRefresh: true); // Trigger refresh để đảm bảo đồng bộ
-        _updatingItemIds.remove(item.orderItemId); // Clean up
-        return;
-      }
-      // Thoát nếu dialog đóng và API thất bại
-      if (!isDialogStillMounted &&
-          (response.statusCode < 200 || response.statusCode >= 300)) {
-        _updatingItemIds.remove(item.orderItemId); // Clean up
-        return;
-      }
-
-      // --- Xử lý kết quả API ---
       if (response.statusCode == 200 || response.statusCode == 204) {
-        print("API Success: Item ${item.orderItemId} updated to '$newStatus'.");
+        print("API OK: Item ${item.orderItemId} -> '$newStatus'.");
         success = true;
-
-        // Cập nhật trạng thái item trong danh sách chi tiết của Dialog
         final index =
             _detailItems.indexWhere((i) => i.orderItemId == item.orderItemId);
         if (index != -1) {
           try {
             setDialogState(() => _detailItems[index].status = newStatus);
           } catch (e) {
-            // Fallback nếu setState lỗi (ít xảy ra)
             _detailItems[index].status = newStatus;
-            print(
-                "Error setting dialog state after successful update (Item ${item.orderItemId}): $e");
           }
-
-          // --- Logic Đánh dấu In Progress và Hoàn thành Đơn ---
-          bool allItemsInThisOrderServed =
+          bool allServed =
               _detailItems.every((i) => i.status.toLowerCase() == 'served');
-
-          if (allItemsInThisOrderServed) {
-            // -- TRƯỜNG HỢP: ĐƠN HÀNG ĐÃ HOÀN THÀNH TẤT CẢ --
-            print(
-                "Order ${order.orderId} fully served (last single item completed). Triggering final completion API call.");
-
-            // ***** GỌI API HOÀN THÀNH ĐƠN HÀNG *****
-            bool completeOrderSuccess =
-                await _callCompleteOrderApi(order.orderId);
-
-            // Kiểm tra lại mount status sau khi gọi API complete
+          if (allServed) {
+            print("Order ${order.orderId} fully served. Calling complete API.");
+            bool completeOk = await _callCompleteOrderApi(order.orderId);
             if (!mounted) return;
-            try {
-              (dialogContext as Element).widget;
-            } catch (e) {
-              isDialogStillMounted = false;
-            }
-
-            if (!completeOrderSuccess) {
-              // Nếu API /complete thất bại, hiển thị lỗi và không đóng popup/xóa đơn
-              print(
-                  "Error: Failed to call complete order API for ${order.orderId} after last item served.");
-              String errorMsg =
-                  'Lỗi khi xác nhận hoàn thành đơn hàng với server.';
-              if (isDialogStillMounted) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-                  content: Text(errorMsg),
-                  backgroundColor: Colors.orange,
-                ));
-              } else if (mounted) {
-                ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-                  content: Text(errorMsg),
-                  backgroundColor: Colors.orange,
-                ));
-              }
-              // Không tiếp tục xử lý UI update phía dưới nếu API complete lỗi
-              // Reset updating state cho item cuối cùng này
+            if (!completeOk) {
+              print("Err: Failed /complete API for ${order.orderId}");
+              String msg = 'Lỗi xác nhận hoàn thành đơn.';
+              if (mounted)
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(msg), backgroundColor: Colors.orange));
               try {
-                if (isDialogStillMounted)
-                  setDialogState(() {
-                    _updatingItemIds.remove(item.orderItemId);
-                  });
-                else
+                setDialogState(() {
                   _updatingItemIds.remove(item.orderItemId);
+                });
               } catch (e) {
                 _updatingItemIds.remove(item.orderItemId);
               }
-              return; // Dừng ở đây
+              return;
             }
-            // ***** KẾT THÚC GỌI API HOÀN THÀNH *****
-
-            // --- Cập nhật UI ngay lập tức (chỉ khi API /complete thành công) ---
             if (mounted) {
               setState(() {
                 _pendingOrders = _pendingOrders
@@ -3009,24 +3246,19 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                 duration: const Duration(seconds: 3),
               ));
             }
-            if (isDialogStillMounted && Navigator.canPop(dialogContext)) {
+            if (Navigator.canPop(dialogContext)) {
               Navigator.of(dialogContext).pop();
             }
-            if (mounted) {
-              _fetchCompletedOrders();
-            } // Fetch nền
+            if (mounted) _fetchCompletedOrders();
           } else {
-            // -- TRƯỜNG HỢP: ĐƠN HÀNG CHƯA HOÀN THÀNH TẤT CẢ --
-            // Đánh dấu đơn hàng là đang xử lý nếu chưa được đánh dấu
             if (!_inProgressOrderIds.contains(order.orderId)) {
               if (mounted) {
                 setState(() {
-                  print("Marking order ${order.orderId} as in progress.");
+                  print("Marking order ${order.orderId} in progress.");
                   _inProgressOrderIds.add(order.orderId);
                 });
               }
             }
-            // ***** THÊM SNACKBAR CHO MÓN ĂN ĐƠN LẺ *****
             if (mounted && newStatus.toLowerCase() == 'served') {
               ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
                 content:
@@ -3036,314 +3268,175 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
               ));
             }
           }
-          // --- Kết thúc Logic Đánh dấu ---
         } else {
-          // Item không tìm thấy trong list local -> Tải lại chi tiết
-          if (isDialogStillMounted) {
-            _fetchOrderDetail(order.orderId, setDialogState);
-          }
+          print("Err: Item ${item.orderItemId} not found locally.");
+          try {
+            setDialogState(
+                () => _fetchOrderDetail(order.orderId, setDialogState));
+          } catch (e) {}
         }
       } else {
-        // --- Xử lý lỗi API (statusCode != 200/204) ---
         print(
-            "API Error updating item ${item.orderItemId}: ${response.statusCode}, Body: ${utf8.decode(response.bodyBytes)}");
+            "API Err update item ${item.orderItemId}: ${response.statusCode}, ${utf8.decode(response.bodyBytes)}");
         success = false;
-        String errorMsg = 'Lỗi cập nhật món (${response.statusCode})';
+        String m = 'Lỗi cập nhật món (${response.statusCode})';
         try {
-          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-          if (errorBody is Map && errorBody.containsKey('detail')) {
-            errorMsg += ': ${errorBody['detail']}';
+          final eb = jsonDecode(utf8.decode(response.bodyBytes));
+          if (eb is Map && eb.containsKey('detail')) {
+            m += ': ${eb['detail']}';
           }
         } catch (_) {}
-        // Hiển thị lỗi
-        if (isDialogStillMounted) {
-          ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-              content: Text(errorMsg), backgroundColor: Colors.redAccent));
-        } else if (mounted) {
-          ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-              content: Text(errorMsg), backgroundColor: Colors.redAccent));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(m), backgroundColor: Colors.redAccent));
         }
       }
     } catch (e) {
-      // --- Xử lý lỗi mạng/timeout/parsing ---
-      if (!mounted) return; // Kiểm tra mount sau catch
-      try {
-        (dialogContext as Element).widget;
-      } catch (e) {
-        isDialogStillMounted = false;
-      }
-      if (!isDialogStillMounted) {
-        _updatingItemIds.remove(item.orderItemId);
-        return;
-      } // Thoát nếu dialog đóng
-
-      print(
-          "Network/Timeout/Other Error updating item ${item.orderItemId}: $e");
+      if (!mounted) return;
+      print("Net/Timeout Err update item ${item.orderItemId}: $e");
       success = false;
-      String errorMsg = 'Lỗi mạng hoặc timeout khi cập nhật món ăn.';
+      String m = 'Lỗi mạng/timeout.';
       if (e is TimeoutException) {
-        errorMsg = 'Yêu cầu cập nhật món ăn quá thời gian. Vui lòng thử lại.';
+        m = 'Quá thời gian.';
       }
-      // Hiển thị lỗi
-      if (isDialogStillMounted) {
-        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-            content: Text(errorMsg), backgroundColor: Colors.orangeAccent));
-      } else if (mounted) {
-        ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-            content: Text(errorMsg), backgroundColor: Colors.orangeAccent));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(m), backgroundColor: Colors.orangeAccent));
       }
     } finally {
-      // --- Kết thúc trạng thái loading cho item này ---
       if (mounted) {
         try {
-          (dialogContext as Element).widget;
+          setDialogState(() => _updatingItemIds.remove(item.orderItemId));
         } catch (e) {
-          isDialogStillMounted = false;
-        }
-        if (isDialogStillMounted) {
-          try {
-            setDialogState(() {
-              _updatingItemIds.remove(item.orderItemId);
-            });
-          } catch (e) {
-            _updatingItemIds.remove(item.orderItemId);
-          } // Fallback
-        } else {
           _updatingItemIds.remove(item.orderItemId);
         }
       } else {
         _updatingItemIds.remove(item.orderItemId);
       }
-      print(
-          "Finished update attempt for item ${item.orderItemId}. Success: $success");
+      print("Finished update item ${item.orderItemId}. Success: $success");
     }
   }
 
-// ***** THÊM HÀM HELPER MỚI ĐỂ GỌI API COMPLETE ORDER *****
   Future<bool> _callCompleteOrderApi(int orderId) async {
     final url = Uri.parse(
         'https://soa-deploy.up.railway.app/kitchen/order/complete/$orderId');
     final headers = {'Content-Type': 'application/json'};
-    print("Calling API (Helper): PATCH ${url.toString()}");
+    print("PATCH Helper: $url");
     try {
-      final response = await http
+      final r = await http
           .patch(url, headers: headers)
-          .timeout(const Duration(seconds: 10)); // Timeout riêng cho complete
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        print("API Success (Helper): Order $orderId marked complete.");
-        return true; // Success
+          .timeout(const Duration(seconds: 10));
+      if (r.statusCode == 200 || r.statusCode == 204) {
+        print("API OK Helper: Order $orderId complete.");
+        return true;
       } else {
         print(
-            "API Error (Helper): Order $orderId failed complete (${response.statusCode}), Body: ${response.body}");
-        return false; // Failure
+            "API Err Helper: Order $orderId fail complete (${r.statusCode}), ${r.body}");
+        return false;
       }
     } catch (e) {
-      print("Network/Timeout Error (Helper) for complete order $orderId: $e");
-      return false; // Failure on exception
+      print("Net/Timeout Err Helper complete order $orderId: $e");
+      return false;
     }
   }
 
-// ***** MODIFIED: Sử dụng API mới, cập nhật UI tức thì + thêm vào Completed + SnackBar *****
   Future<void> _completeAllItemsForOrder(KitchenListOrder order,
       StateSetter setDialogState, BuildContext dialogContext) async {
-    if (_isCompletingAll) return; // Prevent double taps
-    if (!mounted) return;
-
-    bool isDialogStillMounted = true;
+    if (_isCompletingAll || !mounted) return;
+    print("API complete order ${order.orderId} directly.");
     try {
-      (dialogContext as Element).widget;
+      setDialogState(() => _isCompletingAll = true);
     } catch (e) {
-      isDialogStillMounted = false;
-    }
-    if (!isDialogStillMounted) return;
-
-    print("Calling API to complete order ${order.orderId} directly.");
-
-    // --- Bắt đầu trạng thái loading ---
-    try {
-      setDialogState(() {
-        _isCompletingAll = true;
-      });
-    } catch (e) {
-      print("Error setting dialog state for 'Complete Order' start: $e");
-      _isCompletingAll = false;
+      print("Err set dialog 'Complete All' start: $e");
       return;
     }
-
-    // --- Gọi API mới ---
-    final url = Uri.parse(
-        'https://soa-deploy.up.railway.app/kitchen/order/complete/${order.orderId}');
-    final headers = {'Content-Type': 'application/json'};
-    bool success = false;
-
-    try {
-      final response = await http.patch(url, headers: headers).timeout(
-          const Duration(seconds: 15)); // Timeout for complete order API
-
-      if (!mounted) return; // Check mount after await
-      try {
-        (dialogContext as Element).widget;
-      } catch (e) {
-        isDialogStillMounted = false;
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        print(
-            "API Success: Order ${order.orderId} marked as complete by server.");
-        success = true;
-
-        // --- CẬP NHẬT UI NGAY LẬP TỨC & ĐÓNG POPUP ---
-        if (mounted) {
-          setState(() {
-            // Xóa khỏi pending
-            _pendingOrders = _pendingOrders
-                .where((o) => o.orderId != order.orderId)
-                .toList(); // Update notifier via setter
-            // Xóa khỏi danh sách đang xử lý
-            _inProgressOrderIds.remove(order.orderId);
-
-            // THÊM VÀO COMPLETED (Client-side)
-            if (!_completedOrders.any((co) => co.orderId == order.orderId)) {
-              _completedOrders.insert(0, order);
-              print(
-                  "Added order ${order.orderId} to local completed list (API complete).");
-            }
-
-            print(
-                "Removed order ${order.orderId} from main pending list (API complete).");
-            _notifyTableStatusUpdate(
-                order.tableNumber); // Thông báo cho MenuScreen
-          });
-
-          // THÊM SNACKBAR THÔNG BÁO HOÀN THÀNH ĐƠN
-          ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-            content: Text('Đơn hàng #${order.orderId} đã hoàn thành!'),
-            backgroundColor: Colors.green[700],
-            duration: const Duration(seconds: 3),
-          ));
-        }
-        if (isDialogStillMounted && Navigator.canPop(dialogContext)) {
-          Navigator.of(dialogContext).pop(); // Đóng popup chi tiết
-        }
-        // --- KẾT THÚC CẬP NHẬT UI ---
-
-        // Fetch completed in background without await/loading for consistency
-        if (mounted) {
-          _fetchCompletedOrders(); // Không cần await
-        }
-      } else {
-        // Xử lý lỗi API
-        print(
-            "API Error completing order ${order.orderId}: ${response.statusCode}, Body: ${response.body}");
-        success = false;
-        String errorMsg = 'Lỗi hoàn thành đơn (${response.statusCode})';
-        try {
-          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-          if (errorBody is Map && errorBody.containsKey('detail')) {
-            errorMsg += ': ${errorBody['detail']}';
-          }
-        } catch (_) {}
-        // Hiển thị lỗi
-        if (isDialogStillMounted) {
-          ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-              content: Text(errorMsg), backgroundColor: Colors.redAccent));
-          // Tải lại chi tiết để user thấy trạng thái hiện tại
-          _fetchOrderDetail(order.orderId, setDialogState);
-        } else if (mounted) {
-          ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-              content: Text(errorMsg), backgroundColor: Colors.redAccent));
-        }
-      }
-    } catch (e) {
-      // Xử lý lỗi mạng/timeout
-      print("Network/Timeout Error completing order ${order.orderId}: $e");
-      success = false;
-      String errorMsg = 'Lỗi mạng hoặc timeout khi hoàn thành đơn.';
-      if (e is TimeoutException) {
-        errorMsg = 'Yêu cầu hoàn thành đơn quá thời gian. Vui lòng thử lại.';
-      }
-
-      if (isDialogStillMounted) {
-        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
-          content: Text(errorMsg),
-          backgroundColor: Colors.orangeAccent,
-        ));
-        _fetchOrderDetail(
-            order.orderId, setDialogState); // Tải lại chi tiết khi có lỗi
-      } else if (mounted) {
-        ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
-          content: Text(errorMsg),
-          backgroundColor: Colors.orangeAccent,
-        ));
-      }
-    } finally {
-      // --- Kết thúc trạng thái loading ---
+    bool success = await _callCompleteOrderApi(order.orderId);
+    if (!mounted) return;
+    if (success) {
+      print("API OK: Order ${order.orderId} complete via All.");
       if (mounted) {
-        try {
-          (dialogContext as Element).widget;
-        } catch (e) {
-          isDialogStillMounted = false;
-        }
-        if (isDialogStillMounted) {
-          try {
-            setDialogState(() {
-              _isCompletingAll = false;
-              _updatingItemIds.clear(); /* Xóa cả item ids nếu có */
-            });
-          } catch (e) {
-            _isCompletingAll = false;
-            _updatingItemIds.clear();
+        setState(() {
+          _pendingOrders =
+              _pendingOrders.where((o) => o.orderId != order.orderId).toList();
+          _inProgressOrderIds.remove(order.orderId);
+          if (!_completedOrders.any((co) => co.orderId == order.orderId)) {
+            _completedOrders.insert(0, order);
           }
-        } else {
+          _notifyTableStatusUpdate(order.tableNumber);
+        });
+        ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
+          content: Text('Đơn hàng #${order.orderId} đã hoàn thành!'),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
+        ));
+      }
+      if (Navigator.canPop(dialogContext)) {
+        Navigator.of(dialogContext).pop();
+      }
+      if (mounted) _fetchCompletedOrders();
+    } else {
+      print("API Err complete order ${order.orderId} via All.");
+      String m = 'Lỗi hoàn thành đơn hàng.';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(m), backgroundColor: Colors.redAccent));
+      }
+      try {
+        setDialogState(() => _fetchOrderDetail(order.orderId, setDialogState));
+      } catch (e) {}
+    }
+    if (mounted) {
+      try {
+        setDialogState(() {
           _isCompletingAll = false;
           _updatingItemIds.clear();
-        }
-      } else {
+        });
+      } catch (e) {
         _isCompletingAll = false;
         _updatingItemIds.clear();
       }
-      print(
-          "'Complete Order' process finished for order ${order.orderId}. Success: $success");
+    } else {
+      _isCompletingAll = false;
+      _updatingItemIds.clear();
     }
+    print("Finished 'Complete All' ${order.orderId}. Success: $success");
   }
 
   void _notifyTableStatusUpdate(int? tableNumber) {
     if (!mounted) return;
-    if (tableNumber == null || tableNumber <= 0) {
-      print(
-          "Warning: Cannot notify table status, invalid table number: $tableNumber");
+    if (tableNumber == null || tableNumber <= 0 || tableNumber == -1) {
+      print("Warn: Cannot notify invalid table#: $tableNumber. Refreshing.");
       _fetchPendingOrders(forceRefresh: true);
       return;
     }
-    print("Checking if table $tableNumber is now clear...");
-    bool otherPendingForTable = _pendingOrders
-        .any((pendingOrder) => pendingOrder.tableNumber == tableNumber);
-    if (!otherPendingForTable) {
-      print("Table $tableNumber is now clear. Calling onTableCleared.");
+    print("Check if table $tableNumber clear...");
+    bool others = _pendingOrders.any((o) => o.tableNumber == tableNumber);
+    if (!others) {
+      print("Table $tableNumber clear. Call onTableCleared.");
       try {
         widget.onTableCleared?.call(tableNumber);
       } catch (e) {
-        print("Error calling onTableCleared: $e");
+        print("Err call onTableCleared: $e");
       }
     } else {
-      print(
-          "Table $tableNumber still has other pending orders. Recalculating counts.");
-      Map<int, int> currentCounts = {};
+      print("Table $tableNumber still pending. Recalc counts.");
+      Map<int, int> counts = {};
       for (var o in _pendingOrders) {
-        if (o.tableNumber != null && o.tableNumber! > 0) {
-          currentCounts[o.tableNumber!] =
-              (currentCounts[o.tableNumber!] ?? 0) + 1;
+        if (o.tableNumber != null &&
+            o.tableNumber! > 0 &&
+            o.tableNumber! != -1) {
+          counts[o.tableNumber!] = (counts[o.tableNumber!] ?? 0) + 1;
         }
       }
       try {
-        widget.onOrderUpdate?.call(currentCounts);
+        widget.onOrderUpdate?.call(counts);
       } catch (e) {
-        print("Error calling onOrderUpdate after partial table clear: $e");
+        print("Err call onOrderUpdate after partial clear: $e");
       }
     }
   }
 
+  // --- Helper Methods for Status Display ---
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'ordered':
@@ -3397,14 +3490,22 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     }
   }
 
+  // --- Main Build Method ---
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final theme = Theme.of(context);
     return Column(
       children: [
-        _buildViewSwitcher(theme),
+        _buildHeaderWithSearch(theme),
         Expanded(child: _buildBodyContent(theme)),
+        if (_isBackgroundLoading && !_isLoadingPending && !_isLoadingCompleted)
+          LinearProgressIndicator(
+            minHeight: 2,
+            backgroundColor: Colors.transparent,
+            valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.secondary.withOpacity(0.5)),
+          ),
         if (!_isConnected && _reconnectAttempts > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -3416,11 +3517,9 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                     color: Colors.white, size: 14),
                 const SizedBox(width: 8),
                 Text(
-                  _isConnecting
-                      ? 'Đang kết nối lại...'
-                      : 'Mất kết nối thời gian thực. Đang thử lại...',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: Colors.white, fontSize: 10.5),
+                  _isConnecting ? 'Đang kết nối...' : 'Mất kết nối...',
+                  style: (theme.textTheme.bodySmall ?? const TextStyle())
+                      .copyWith(color: Colors.white, fontSize: 10.5),
                 ),
               ],
             ),
@@ -3429,85 +3528,156 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     );
   }
 
-  Widget _buildViewSwitcher(ThemeData theme) {
-    final Color pendingSelCol = Colors.yellowAccent[700]!;
-    final Color completedSelCol = Colors.greenAccent;
-    final Color unselectedCol = Colors.white70;
+  // --- Header Row with Switcher and Search ---
+  Widget _buildHeaderWithSearch(ThemeData theme) {
     return Padding(
-        padding: const EdgeInsets.symmetric(
-            vertical: kDefaultPadding, horizontal: kDefaultPadding * 1.5),
-        child: SegmentedButton<OrderListView>(
-          segments: <ButtonSegment<OrderListView>>[
-            ButtonSegment<OrderListView>(
-                value: OrderListView.pending,
-                label: Text('Đang xử lý',
-                    style: TextStyle(
-                        color: _currentView == OrderListView.pending
-                            ? pendingSelCol
-                            : unselectedCol)),
-                icon: Icon(Icons.sync,
-                    size: 18,
-                    color: _currentView == OrderListView.pending
-                        ? pendingSelCol
-                        : unselectedCol)),
-            ButtonSegment<OrderListView>(
-                value: OrderListView.completed,
-                label: Text('Đã hoàn thành',
-                    style: TextStyle(
-                        color: _currentView == OrderListView.completed
-                            ? completedSelCol
-                            : unselectedCol)),
-                icon: Icon(Icons.check_circle_outline_rounded,
-                    size: 18,
-                    color: _currentView == OrderListView.completed
-                        ? completedSelCol
-                        : unselectedCol)),
-          ],
-          selected: <OrderListView>{_currentView},
-          onSelectionChanged: (Set<OrderListView> newSelection) {
-            if (newSelection.isNotEmpty && newSelection.first != _currentView) {
-              setState(() {
-                _currentView = newSelection.first;
-              });
-              if (_currentView == OrderListView.completed &&
-                  !_completedOrdersLoaded &&
-                  !_isLoadingCompleted) {
-                _fetchCompletedOrders();
-              }
-            }
-          },
-          style: theme.segmentedButtonTheme.style,
-        ));
+      padding: const EdgeInsets.fromLTRB(kDefaultPadding * 1.5, kDefaultPadding,
+          kDefaultPadding * 1.5, kDefaultPadding * 0.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _buildViewSwitcher(theme),
+          const Spacer(),
+          SizedBox(
+            width: 250,
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                  .copyWith(fontSize: 13.5),
+              decoration: InputDecoration(
+                hintText: 'Tìm đơn/bàn...',
+                prefixIcon: Icon(Icons.search, size: 18),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, size: 18),
+                        tooltip: 'Xóa',
+                        splashRadius: 15,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
+  // --- Builds the Pending/Completed switcher ---
+  Widget _buildViewSwitcher(ThemeData theme) {
+    final Color pendingSelCol = theme.brightness == Brightness.dark
+        ? Colors.yellowAccent[700]!
+        : Colors.orange[800]!;
+    final Color completedSelCol = theme.brightness == Brightness.dark
+        ? Colors.greenAccent
+        : Colors.green[700]!;
+    final Color unselectedFG = theme.colorScheme.onSurface.withOpacity(0.7);
+    return SegmentedButton<OrderListView>(
+      segments: <ButtonSegment<OrderListView>>[
+        ButtonSegment<OrderListView>(
+            value: OrderListView.pending,
+            label: Text('Đang xử lý'),
+            icon: Icon(Icons.sync, size: 18)),
+        ButtonSegment<OrderListView>(
+            value: OrderListView.completed,
+            label: Text('Đã hoàn thành'),
+            icon: Icon(Icons.check_circle_outline_rounded, size: 18)),
+      ],
+      selected: <OrderListView>{_currentView},
+      onSelectionChanged: (Set<OrderListView> newSelection) {
+        if (newSelection.isNotEmpty && newSelection.first != _currentView) {
+          setState(() {
+            _currentView = newSelection.first;
+            _clearSearch();
+            if (_currentView == OrderListView.completed &&
+                !_completedOrdersLoaded &&
+                !_isLoadingCompleted) {
+              _fetchCompletedOrders();
+            } else {
+              _updateFilteredLists();
+            }
+          });
+        }
+      },
+      style: theme.segmentedButtonTheme.style?.copyWith(
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return _currentView == OrderListView.pending
+                ? pendingSelCol
+                : completedSelCol;
+          }
+          return unselectedFG;
+        }),
+        iconColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return _currentView == OrderListView.pending
+                ? pendingSelCol
+                : completedSelCol;
+          }
+          return unselectedFG;
+        }),
+      ),
+    );
+  }
+
+  // --- Builds the main content area ---
   Widget _buildBodyContent(ThemeData theme) {
     Widget content;
     Future<void> Function() onRefresh;
+    bool showLoading = false;
+    bool showEmpty = false;
+    String? errorMessage;
+    List<KitchenListOrder> listToShow = [];
     if (_currentView == OrderListView.pending) {
       onRefresh = () => _fetchPendingOrders(forceRefresh: true);
-      if (_isLoadingPending && _pendingOrders.isEmpty) {
-        content = _buildShimmerLoadingList(theme);
-      } else if (_pendingErrorMessage != null && _pendingOrders.isEmpty) {
-        content = _buildErrorWidget(_pendingErrorMessage!, onRefresh);
-      } else if (_pendingOrders.isEmpty && !_isLoadingPending) {
-        content = _buildEmptyListWidget('Không có đơn hàng nào đang xử lý.',
-            Icons.no_food_outlined, onRefresh);
-      } else {
-        content = _buildOrderListView(_pendingOrders);
-      }
+      errorMessage = _pendingErrorMessage;
+      listToShow = _filteredPendingOrders;
+      showLoading = _isLoadingPending && _pendingOrders.isEmpty;
+      showEmpty = listToShow.isEmpty &&
+          !showLoading &&
+          errorMessage == null &&
+          !_isLoadingPending &&
+          !_isBackgroundLoading;
     } else {
       onRefresh = () => _fetchCompletedOrders(forceRefresh: true);
-      if (_isLoadingCompleted && _completedOrders.isEmpty) {
-        content = _buildShimmerLoadingList(theme);
-      } else if (_completedErrorMessage != null && _completedOrders.isEmpty) {
-        content = _buildErrorWidget(_completedErrorMessage!, onRefresh);
-      } else if (_completedOrders.isEmpty && !_isLoadingCompleted) {
-        content = _buildEmptyListWidget('Chưa có đơn hàng nào hoàn thành.',
-            Icons.history_toggle_off_outlined, onRefresh);
-      } else {
-        content = _buildOrderListView(_completedOrders);
-      }
+      errorMessage = _completedErrorMessage;
+      listToShow = _filteredCompletedOrders;
+      showLoading = _isLoadingCompleted && _completedOrders.isEmpty;
+      showEmpty = listToShow.isEmpty &&
+          !showLoading &&
+          errorMessage == null &&
+          !_isLoadingCompleted &&
+          !_isBackgroundLoading;
     }
+
+    if (showLoading) {
+      content = _buildShimmerLoadingList(theme);
+    } else if (errorMessage != null && listToShow.isEmpty) {
+      content = _buildErrorWidget(errorMessage, onRefresh);
+    } else if (showEmpty && !_isBackgroundLoading) {
+      String emptyMsg;
+      IconData emptyIcon;
+      if (_searchQuery.isNotEmpty) {
+        emptyMsg = 'Không tìm thấy đơn hàng nào khớp.';
+        emptyIcon = Icons.search_off_rounded;
+      } else if (_currentView == OrderListView.pending) {
+        emptyMsg = 'Không có đơn hàng đang xử lý.';
+        emptyIcon = Icons.no_food_outlined;
+      } else {
+        emptyMsg = 'Chưa có đơn hàng hoàn thành.';
+        emptyIcon = Icons.history_toggle_off_outlined;
+      }
+      content = _buildEmptyListWidget(emptyMsg, emptyIcon, onRefresh);
+    } else {
+      content = _buildOrderListView(listToShow);
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: theme.colorScheme.secondary,
@@ -3516,14 +3686,17 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
     );
   }
 
+  // --- Builds the shimmer loading list ---
   Widget _buildShimmerLoadingList(ThemeData theme) {
     return Shimmer.fromColors(
-      baseColor: theme.cardTheme.color!.withOpacity(0.5),
-      highlightColor: theme.cardTheme.color!.withOpacity(0.8),
+      baseColor: theme.cardTheme.color?.withOpacity(0.5) ??
+          theme.colorScheme.surface.withOpacity(0.5),
+      highlightColor: theme.cardTheme.color?.withOpacity(0.8) ??
+          theme.colorScheme.surface.withOpacity(0.8),
       child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(kDefaultPadding, kDefaultPadding,
-            kDefaultPadding, kDefaultPadding + kBottomActionBarHeight),
+        padding: EdgeInsets.fromLTRB(kDefaultPadding, 0, kDefaultPadding,
+            kDefaultPadding + kBottomActionBarHeight),
         itemCount: 7,
         itemBuilder: (_, __) => Card(
           margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
@@ -3535,136 +3708,163 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.colorScheme.onSurface.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8))),
             title: Container(
                 width: double.infinity,
                 height: 16.0,
-                color: Colors.white,
+                color: theme.colorScheme.onSurface.withOpacity(0.1),
                 margin: const EdgeInsets.only(bottom: 8)),
-            subtitle: Container(width: 120, height: 12.0, color: Colors.white),
+            subtitle: Container(
+                width: 120,
+                height: 12.0,
+                color: theme.colorScheme.onSurface.withOpacity(0.1)),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildOrderListView(List<KitchenListOrder> orders) {
+  // --- Builds the actual list view for orders - USES listToShow ---
+  Widget _buildOrderListView(List<KitchenListOrder> listToShow) {
     final theme = Theme.of(context);
-    return LayoutBuilder(builder: (context, constraints) {
-      return ListView.builder(
+    if (listToShow.isEmpty && !_isBackgroundLoading) {
+      String emptyMsg;
+      IconData emptyIcon;
+      Future<void> Function() onRefresh;
+      if (_searchQuery.isNotEmpty) {
+        emptyMsg = 'Không tìm thấy đơn nào khớp.';
+        emptyIcon = Icons.search_off_rounded;
+      } else if (_currentView == OrderListView.pending) {
+        emptyMsg = 'Không có đơn hàng đang xử lý.';
+        emptyIcon = Icons.no_food_outlined;
+      } else {
+        emptyMsg = 'Chưa có đơn hàng hoàn thành.';
+        emptyIcon = Icons.history_toggle_off_outlined;
+      }
+      onRefresh = _currentView == OrderListView.pending
+          ? () => _fetchPendingOrders(forceRefresh: true)
+          : () => _fetchCompletedOrders(forceRefresh: true);
+      return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(kDefaultPadding, kDefaultPadding,
-            kDefaultPadding, kDefaultPadding + kBottomActionBarHeight),
-        itemCount: orders.length,
-        itemBuilder: (context, index) {
-          final order = orders[index];
-          final formattedTime =
-              DateFormat('HH:mm - dd/MM/yy').format(order.orderTime);
-          final bool isServed = _currentView == OrderListView.completed;
-          final bool showInProgressIcon =
-              !isServed && _inProgressOrderIds.contains(order.orderId);
-          final defaultTitleStyle = theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            color: isServed ? Colors.grey[400] : Colors.white,
-            fontSize: 14.5,
-          );
-          final tableNumberStyle = defaultTitleStyle?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: isServed ? Colors.grey[350] : Colors.white);
-          final tableErrorStyle = defaultTitleStyle?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.error,
-            fontStyle: FontStyle.italic,
-          );
-          int? currentTableNumber = order.tableNumber;
-          InlineSpan tableNumberSpan;
-          if (currentTableNumber != null) {
-            if (currentTableNumber == -1) {
-              tableNumberSpan = TextSpan(text: 'Lỗi', style: tableErrorStyle);
-            } else {
-              tableNumberSpan = TextSpan(
-                  text: currentTableNumber.toString(), style: tableNumberStyle);
-            }
-          } else {
-            tableNumberSpan = WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: Tooltip(
-                message: 'Đang tải số bàn...',
-                child: SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 1.5, color: Colors.grey[500])),
-              ),
-            );
-          }
-          return Card(
-            margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
-            elevation: isServed ? 1.5 : 3.5,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: isServed
-                ? theme.cardTheme.color?.withAlpha(180)
-                : theme.cardTheme.color,
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: kDefaultPadding * 1.8,
-                  vertical: kDefaultPadding * 1.2),
-              leading: Icon(
-                  isServed
-                      ? Icons.check_circle_outline
-                      : Icons.receipt_long_outlined,
-                  color: isServed
-                      ? Colors.greenAccent.withOpacity(0.7)
-                      : theme.colorScheme.secondary,
-                  size: 34),
-              title: Text.rich(
-                TextSpan(
-                  style: defaultTitleStyle,
-                  children: [
-                    TextSpan(
-                        text: 'Bàn ',
-                        style: TextStyle(
-                            color:
-                                isServed ? Colors.grey[400] : Colors.white70)),
-                    tableNumberSpan,
-                    TextSpan(text: ' - Đơn #${order.orderId}'),
-                    if (showInProgressIcon)
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                              left: kDefaultPadding * 0.75),
-                          child: Icon(Icons.hourglass_top_rounded,
-                              color: Colors.yellowAccent[700], size: 16),
-                        ),
-                      ),
-                  ],
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 5.0),
-                  child: Text('Thời gian: $formattedTime',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color:
-                              isServed ? Colors.grey[500] : Colors.grey[350]))),
-              trailing: isServed
-                  ? Icon(Icons.visibility_outlined,
-                      color: Colors.grey[500], size: 22)
-                  : Icon(Icons.chevron_right, color: Colors.white38),
-              onTap: () => _showOrderDetailPopup(context, order),
-              tileColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+        child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: _buildEmptyListWidget(emptyMsg, emptyIcon, onRefresh)),
+      );
+    }
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(kDefaultPadding, 0, kDefaultPadding,
+          kDefaultPadding + kBottomActionBarHeight),
+      itemCount: listToShow.length,
+      itemBuilder: (context, index) {
+        final order = listToShow[index];
+        final fmtTime = DateFormat('HH:mm - dd/MM/yy').format(order.orderTime);
+        final bool isServed = _currentView == OrderListView.completed;
+        final bool showIP =
+            !isServed && _inProgressOrderIds.contains(order.orderId);
+        final baseTitleStyle = theme.textTheme.bodyMedium ?? const TextStyle();
+        final baseSubStyle = theme.textTheme.bodySmall ?? const TextStyle();
+        final primaryTextColor = isServed
+            ? baseTitleStyle.color?.withOpacity(0.7)
+            : baseTitleStyle.color;
+        final titleStyle = baseTitleStyle.copyWith(
+          fontWeight: FontWeight.w500,
+          color: primaryTextColor,
+          fontSize: 14.5,
+        );
+        final tableNumStyle = titleStyle.copyWith(
+          fontWeight: FontWeight.bold,
+        );
+        final tableErrStyle = titleStyle.copyWith(
+          fontWeight: FontWeight.bold,
+          color: theme.colorScheme.error,
+          fontStyle: FontStyle.italic,
+        );
+        final subColor = isServed
+            ? baseSubStyle.color?.withOpacity(0.6)
+            : baseSubStyle.color?.withOpacity(0.8);
+        int? currentTableNum = order.tableNumber;
+        InlineSpan tableSpan;
+        if (currentTableNum == null) {
+          tableSpan = WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Tooltip(
+              message: 'Đang tải...',
+              child: SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 1.5, color: theme.disabledColor)),
             ),
           );
-        },
-      );
-    });
+        } else if (currentTableNum == -1) {
+          tableSpan = TextSpan(text: 'Lỗi', style: tableErrStyle);
+        } else {
+          tableSpan =
+              TextSpan(text: currentTableNum.toString(), style: tableNumStyle);
+        }
+        return Card(
+          margin: const EdgeInsets.only(bottom: kDefaultPadding * 1.5),
+          elevation: isServed ? 1.5 : 3.5,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: isServed
+              ? theme.cardTheme.color?.withAlpha(200)
+              : theme.cardTheme.color,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: kDefaultPadding * 1.8,
+                vertical: kDefaultPadding * 1.2),
+            leading: Icon(
+                isServed
+                    ? Icons.check_circle_outline
+                    : Icons.receipt_long_outlined,
+                color: isServed
+                    ? Colors.greenAccent.withOpacity(0.7)
+                    : theme.colorScheme.secondary,
+                size: 34),
+            title: Text.rich(
+              TextSpan(
+                style: titleStyle,
+                children: [
+                  TextSpan(text: 'Bàn '),
+                  tableSpan,
+                  TextSpan(text: ' - Đơn #${order.orderId}'),
+                  if (showIP)
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.only(left: kDefaultPadding * 0.75),
+                        child: Icon(Icons.hourglass_top_rounded,
+                            color: Colors.yellowAccent[700], size: 16),
+                      ),
+                    ),
+                ],
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Padding(
+                padding: const EdgeInsets.only(top: 5.0),
+                child: Text('TG: $fmtTime',
+                    style: baseSubStyle.copyWith(color: subColor))),
+            trailing: isServed
+                ? Icon(Icons.visibility_outlined,
+                    color: theme.iconTheme.color?.withOpacity(0.6), size: 22)
+                : Icon(Icons.chevron_right,
+                    color: theme.iconTheme.color?.withOpacity(0.5)),
+            onTap: () => _showOrderDetailPopup(context, order),
+            tileColor: Colors.transparent,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      },
+    );
   }
 
+  // --- Builds the error widget ---
   Widget _buildErrorWidget(String message, Future<void> Function() onRetry) {
     final theme = Theme.of(context);
     return ListView(
@@ -3679,25 +3879,32 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline,
-                              color: Colors.redAccent, size: 50),
+                          Icon(Icons.error_outline,
+                              color: theme.colorScheme.error, size: 50),
                           const SizedBox(height: 16),
                           Text(message,
                               textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(color: Colors.white70)),
+                              style: (theme.textTheme.bodyMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7))),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                               onPressed: onRetry,
                               icon: const Icon(Icons.refresh),
                               label: const Text('Thử lại'),
                               style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent[100]))
+                                  backgroundColor:
+                                      theme.colorScheme.errorContainer,
+                                  foregroundColor:
+                                      theme.colorScheme.onErrorContainer))
                         ]))))
       ],
     );
   }
 
+  // --- Builds the empty list widget ---
   Widget _buildEmptyListWidget(
       String message, IconData icon, Future<void> Function() onRefresh) {
     final theme = Theme.of(context);
@@ -3713,12 +3920,17 @@ class _KitchenOrderListScreenState extends State<KitchenOrderListScreen>
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(icon, size: 60, color: Colors.grey[600]),
+                          Icon(icon,
+                              size: 60,
+                              color: theme.iconTheme.color?.withOpacity(0.5)),
                           const SizedBox(height: 16),
                           Text(message,
                               textAlign: TextAlign.center,
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(color: Colors.grey[400])),
+                              style: (theme.textTheme.titleMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                      color: theme.textTheme.titleMedium?.color
+                                          ?.withOpacity(0.6))),
                           const SizedBox(height: 20),
                           TextButton.icon(
                               onPressed: onRefresh,
