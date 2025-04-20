@@ -18,7 +18,7 @@ const double _colWidthStatus = 140.0;
 const double _colWidthDetails = 80.0;
 // Flex factors cho các cột Expanded
 const int _colFlexPaymentTime = 4; // TG Thanh Toán
-const int _colFlexPaymentMethod = 3; // PT THANH TOÁN
+const int _colFlexPaymentMethod = 3; // **PT THANH TOÁN (Mới)**
 const int _colFlexAmount = 3; // Tổng Tiền
 
 // --- Data Models ---
@@ -209,7 +209,7 @@ class ShiftCustomerSummary {
     }
 
     return ShiftCustomerSummary(
-      shiftId: parseIntSafe(json['shift_id']),
+      shiftId: parseIntSafe(json['shift_id']), // Ép kiểu an toàn
       totalCustomers: parseIntSafe(json['total_customers']),
       totalSessions: parseIntSafe(json['total_sessions']),
     );
@@ -251,9 +251,9 @@ class PaymentHistoryResponse {
 }
 
 // --- Hàm main và MyApp ---
-// void main() {
-//   runApp(MyApp());
-// }
+void main() {
+  runApp(MyApp());
+}
 
 class MyApp extends StatelessWidget {
   @override
@@ -448,8 +448,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   final DateFormat _timeFormatter = DateFormat('HH:mm');
   final DateFormat _fullDateTimeFormatter = DateFormat('HH:mm:ss dd/MM/yyyy');
   final DateFormat _dateTimeDetailFormatter = DateFormat('HH:mm dd/MM/yyyy');
-  final DateFormat _dateFormatter =
-      DateFormat('dd/MM/yyyy'); // Vẫn dùng để hiển thị ngày đã chọn nếu có
+  final DateFormat _dateFormatter = DateFormat('dd/MM/yyyy');
 
   // --- Constants for Table Layout ---
   final double _tableRowHeight = 50.0;
@@ -463,8 +462,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedHistoryYear =
-        DateTime.now().year; // Default to current year for history filter
+    _selectedHistoryYear = DateTime.now().year;
     _fetchShifts();
     _fetchPaymentHistory(); // Fetch history for the default year on init
   }
@@ -657,19 +655,19 @@ class _ManagementScreenState extends State<ManagementScreen> {
           const Spacer(), // Spacer 2
           // TG THANH TOÁN (Expanded, Left Align) - cells[2]
           Expanded(
-            flex: _colFlexPaymentTime,
+            flex: _colFlexPaymentTime, // Cân đối flex
             child: buildCellWrapper(cells[2], Alignment.centerLeft),
           ),
           const Spacer(), // Spacer 3
           // PT THANH TOÁN (Expanded, Left Align) - cells[3]
           Expanded(
-            flex: _colFlexPaymentMethod,
+            flex: _colFlexPaymentMethod, // Cân đối flex
             child: buildCellWrapper(cells[3], Alignment.centerLeft),
           ),
           const Spacer(), // Spacer 4
           // TỔNG TIỀN (Expanded, Left Align) - cells[4]
           Expanded(
-            flex: _colFlexAmount,
+            flex: _colFlexAmount, // Cân đối flex
             child: buildCellWrapper(cells[4], Alignment.centerLeft),
           ),
           const Spacer(), // Spacer 5
@@ -1053,7 +1051,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     if (year == null) {
       setStateIfMounted(() {
         _historyError = "Vui lòng chọn Năm để lọc.";
-        _isLoadingHistory = false; // Dừng loading nếu không có năm
+        _isLoadingHistory = false;
         _historicalBills = [];
         _historyTotalRevenue = 0.0;
       });
@@ -1072,7 +1070,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
       queryParams['month'] = month.toString();
     }
     if (day != null && month != null) {
-      // Chỉ gửi ngày nếu có tháng
       queryParams['day'] = day.toString();
     }
 
@@ -1125,6 +1122,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
       });
     }
   }
+
+  // **Bỏ hàm _generateDummyData**
+
+  // **Bỏ hàm _selectDateForHistory cũ dùng DatePicker**
 
   // --- Build Method Chính ---
   @override
@@ -1536,12 +1537,16 @@ class _ManagementScreenState extends State<ManagementScreen> {
       const DropdownMenuItem<int?>(value: null, child: Text("Tất cả ngày")),
     ];
     if (_selectedHistoryMonth != null && _selectedHistoryYear != null) {
-      final daysInMonth = DateUtils.getDaysInMonth(
-          _selectedHistoryYear!, _selectedHistoryMonth!);
-      dayItems.addAll(List.generate(
-          daysInMonth,
-          (i) => DropdownMenuItem<int?>(
-              value: i + 1, child: Text("Ngày ${i + 1}"))));
+      try {
+        final daysInMonth = DateUtils.getDaysInMonth(
+            _selectedHistoryYear!, _selectedHistoryMonth!);
+        dayItems.addAll(List.generate(
+            daysInMonth,
+            (i) => DropdownMenuItem<int?>(
+                value: i + 1, child: Text("Ngày ${i + 1}"))));
+      } catch (e) {
+        print("Lỗi tính ngày trong tháng: $e");
+      }
     }
 
     return Column(
@@ -1572,7 +1577,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   // Dropdown Năm
                   _buildHistoryFilterDropdown<int>(
                     theme: theme,
-                    value: _selectedHistoryYear,
+                    value: _selectedHistoryYear ??
+                        _years.first, // Cung cấp giá trị mặc định
                     items: _years
                         .map((year) => DropdownMenuItem<int>(
                             value: year, child: Text(year.toString())))
@@ -1584,13 +1590,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
                           _selectedHistoryYear = newValue;
                           _selectedHistoryMonth = null;
                           _selectedHistoryDay = null;
-                          // Không tự động lọc khi chỉ đổi năm
                         });
+                        // Có thể fetch ngay nếu chỉ muốn lọc theo năm
+                        // _fetchPaymentHistory();
                       }
                     },
                   ),
-                  SizedBox(
-                      width: kFilterSpacing), // Khoảng cách giữa các dropdown
+                  SizedBox(width: kFilterSpacing),
 
                   // Dropdown Tháng
                   _buildHistoryFilterDropdown<int?>(
@@ -1601,8 +1607,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       if (newValue != _selectedHistoryMonth) {
                         setState(() {
                           _selectedHistoryMonth = newValue;
-                          _selectedHistoryDay =
-                              null; // Reset ngày khi đổi tháng
+                          _selectedHistoryDay = null;
                         });
                       }
                     },
@@ -1617,11 +1622,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       child: _buildHistoryFilterDropdown<int?>(
                         theme: theme,
                         value: _selectedHistoryDay,
-                        items: dayItems, // Danh sách ngày được cập nhật ở trên
+                        items: dayItems,
                         onChanged: _selectedHistoryMonth == null
                             ? null
                             : (int? newValue) {
-                                // Chỉ cho phép thay đổi nếu đã chọn tháng
                                 if (newValue != _selectedHistoryDay) {
                                   setState(() {
                                     _selectedHistoryDay = newValue;
@@ -1642,8 +1646,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
                         : () =>
                             _fetchPaymentHistory(), // Gọi fetch khi nhấn nút
                     style: theme.elevatedButtonTheme.style?.copyWith(
-                      padding: MaterialStateProperty.all(EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8)), // Nút nhỏ hơn
+                      padding: MaterialStateProperty.all(
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                       textStyle: MaterialStateProperty.all(
                           theme.textTheme.labelSmall?.copyWith(
                               color: Colors.white,
@@ -1662,7 +1666,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // --- Table Header ---
                 _buildTableRow(
                   theme: theme,
                   height: _tableHeaderHeight,
@@ -1684,10 +1687,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: (_selectedHistoryYear == null ||
-                            _isLoadingHistory)
+                            _isLoadingHistory) // Dùng _selectedHistoryYear để kiểm tra
                         ? () async {}
                         : () =>
-                            _fetchPaymentHistory(), // Kéo để refresh theo bộ lọc hiện tại
+                            _fetchPaymentHistory(), // Fetch theo bộ lọc hiện tại
                     color: theme.colorScheme.secondary,
                     backgroundColor: theme.cardTheme.color ?? Colors.white,
                     child: _buildHistoryBillsContent(theme),
@@ -1728,7 +1731,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
     required ThemeData theme,
     required T value,
     required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
+    // **SỬA KIỂU Ở ĐÂY:** Dùng ValueChanged<T?>?
+    required ValueChanged<T?>? onChanged,
   }) {
     return Container(
       height: 38,
@@ -1744,16 +1748,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
         child: DropdownButton<T>(
           value: value,
           items: items,
-          onChanged:
-              _isLoadingHistory ? null : onChanged, // Disable khi đang loading
+          onChanged: _isLoadingHistory ? null : onChanged,
           style: theme.textTheme.bodyMedium,
           icon: Icon(Icons.arrow_drop_down,
               size: 20, color: _isLoadingHistory ? Colors.grey : null),
           isExpanded: false,
           focusColor: Colors.transparent,
-          // Thêm các thuộc tính để làm dropdown nhỏ gọn hơn nếu cần
-          // itemHeight: 48, // Chiều cao mặc định của item
-          // menuMaxHeight: 300, // Giới hạn chiều cao menu xổ xuống
+          // menuMaxHeight: 300, // Có thể giới hạn chiều cao menu nếu cần
         ),
       ),
     );
@@ -1767,7 +1768,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
       desc += "/${_selectedHistoryMonth.toString().padLeft(2, '0')}";
       if (_selectedHistoryDay != null) {
         desc += "/${_selectedHistoryDay.toString().padLeft(2, '0')}";
+      } else {
+        desc += "/Tất cả ngày";
       }
+    } else {
+      desc += "/Tất cả"; // Ngắn gọn hơn khi chỉ chọn năm
     }
     return desc;
   }
@@ -1780,11 +1785,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     // --- Handle Loading, Error, Empty States ---
     if (_isLoadingHistory && _historicalBills.isEmpty) {
-      // Chỉ hiện loading toàn màn hình khi list rỗng
       return Center(
           child: CircularProgressIndicator(color: theme.colorScheme.secondary));
     }
-    // Bỏ kiểm tra selectedDateForHistory == null
     if (_historyError != null) {
       return Center(
         child: Padding(
@@ -1794,7 +1797,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 textAlign: TextAlign.center)),
       );
     }
-    // Hiển thị empty khi load xong, không lỗi, và list rỗng
     if (!_isLoadingHistory &&
         _historyError == null &&
         _historicalBills.isEmpty) {
@@ -1807,7 +1809,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
               child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text('Không có phiếu cho khoảng thời gian đã chọn.',
-                      style: theme.textTheme.bodyMedium)), // Đổi text empty
+                      style: theme.textTheme.bodyMedium)),
             ),
           ),
         ),
@@ -1926,6 +1928,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
         },
       );
     }
+    // Nếu không rơi vào các trường hợp trên (vd: đang load shift ban đầu)
     return const SizedBox.shrink();
   }
 
