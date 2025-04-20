@@ -79,7 +79,11 @@ class ApiService {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true};
+        final data = jsonDecode(response.body); // Lấy dữ liệu từ response body
+        return {
+          'success': true,
+          'data': data, // Trả về toàn bộ dữ liệu, bao gồm session_id
+        };
       } else {
         final data = jsonDecode(response.body);
         return {

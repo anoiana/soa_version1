@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart'; // For groupBy
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
+import 'package:midterm/screens/signInScreen.dart';
 import 'package:shimmer/shimmer.dart'; // Import Shimmer
 // import 'management_screen.dart'; // Assuming this exists
 
@@ -248,7 +249,7 @@ class MyApp extends StatelessWidget {
       title: 'Restaurant App',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
-      home: MenuScreen(),
+      home: LoginScreen(),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../services/service.dart';
@@ -8,8 +9,19 @@ import 'openTable.dart';
 class MenuScreen extends StatefulWidget {
   final int packageId;
   final int tableNumber;
+  final int numberOfCustomers;
+  final String buffetPrice;
+  final int sessionId;
+  final String role;
 
-  MenuScreen({required this.packageId, required this.tableNumber});
+  MenuScreen({
+    required this.packageId,
+    required this.tableNumber,
+    required this.numberOfCustomers,
+    required this.buffetPrice,
+    required this.sessionId,
+    required this.role,
+  });
 
   @override
   _MenuScreenState createState() => _MenuScreenState();
@@ -18,7 +30,7 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   List<Map<String, dynamic>> menuItems = [];
   List<Map<String, dynamic>> cart = [];
-  bool isLoading = true; // Chỉ dùng cho lần tải đầu tiên
+  bool isLoading = true;
   bool isConfirmLoading = false;
   String? errorMessage;
   int selectedCategoryIndex = 0;
@@ -48,12 +60,9 @@ class _MenuScreenState extends State<MenuScreen> {
             if (data['menu_update'] != null) {
               final menuUpdate = data['menu_update'];
               print('Nhận cập nhật menu: $menuUpdate');
-              // Tải lại danh sách món ăn
               fetchMenuItems().then((_) {
                 print('Đã tải lại danh sách món ăn sau cập nhật WebSocket.');
-                // Kiểm tra và cập nhật giỏ hàng
                 _validateCart();
-                // Hiển thị thông báo
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -106,7 +115,6 @@ class _MenuScreenState extends State<MenuScreen> {
   Future<void> fetchMenuItems() async {
     try {
       final items = await ApiService.fetchMenuItems(widget.packageId);
-      // Kiểm tra dữ liệu từ API
       final validatedItems = items.where((item) {
         final itemId = item['item_id'];
         if (itemId == null || itemId is! int) {
@@ -118,7 +126,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
       setState(() {
         menuItems = validatedItems;
-        if (isLoading) isLoading = false; // Chỉ tắt loading lần đầu
+        if (isLoading) isLoading = false;
       });
       print('Đã tải danh sách món ăn: ${menuItems.length} món.');
     } catch (e) {
@@ -170,43 +178,517 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
-  List<String> getUniqueCategories() {
-    final categories = menuItems.map((item) => item['category'] as String).toSet().toList();
-    print('Danh mục: $categories');
-    return categories;
+  void _showSecretCodeDialog(BuildContext context) {
+    TextEditingController codeController = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        bool isLoading = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              backgroundColor: Colors.grey[900],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: Text(
+                'Nhập mã code - Bàn ${widget.tableNumber}',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              content: TextField(
+                controller: codeController,
+                style: TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Nhập mã code',
+                  labelStyle: TextStyle(color: Colors.orange[400]),
+                  prefixIcon: Icon(Icons.vpn_key, color: Colors.orange[400]),
+                  filled: true,
+                  fillColor: Colors.grey[800]!.withOpacity(0.3),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(context),
+                  child: Text('Hủy', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[400],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                    if (codeController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Vui lòng nhập mã bí mật'), backgroundColor: Colors.red[700]),
+                      );
+                      return;
+                    }
+
+                    setState(() {
+                      isLoading = true;
+                    });
+
+                    try {
+                      final success = await ApiService.closeTable(widget.tableNumber, codeController.text);
+                      if (success) {
+                        Navigator.pop(context); // Đóng dialog nhập mã
+                        _showPaymentDialog(context); // Hiển thị dialog thanh toán
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red[700]),
+                      );
+                    } finally {
+                      setState(() {
+                        isLoading = false;
+                      });
+                    }
+                  },
+                  child: isLoading
+                      ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.orange[400],
+                      strokeWidth: 3,
+                    ),
+                  )
+                      : Text(
+                    'Xác nhận',
+                    style: TextStyle(color: Colors.black87),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
-  Future<void> confirmOrder(BuildContext context) async {
-    if (cart.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Giỏ hàng trống!'), backgroundColor: Colors.red[700]),
-      );
-      return;
-    }
+  void _showPaymentDialog(BuildContext context) {
+    double totalAmount = widget.numberOfCustomers * double.parse(widget.buffetPrice);
+    final NumberFormat numberFormat = NumberFormat.decimalPattern('vi_VN');
+    String formattedBuffetPrice = numberFormat.format(double.parse(widget.buffetPrice));
+    String formattedTotalAmount = numberFormat.format(totalAmount);
 
-    setState(() {
-      isConfirmLoading = true;
-    });
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        bool isLoading = false;
+        String? selectedPaymentMethod = 'Tiền mặt';
+        final List<String> paymentMethods = ['Tiền mặt', 'Chuyển khoản'];
 
-    try {
-      final success = await ApiService.confirmOrder(widget.tableNumber, cart);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đã xác nhận đơn hàng thành công'), backgroundColor: Colors.green[700]),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              backgroundColor: Colors.grey[900],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: Colors.orange[400]!.withOpacity(0.3), width: 1),
+              ),
+              elevation: 10,
+              contentPadding: EdgeInsets.all(20),
+              title: Row(
+                children: [
+                  Icon(Icons.receipt_long, color: Colors.orange[400], size: 28),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Thanh Toán - Bàn ${widget.tableNumber}',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Xác nhận thanh toán cho bàn của bạn',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  _buildInfoRow(
+                    icon: Icons.group,
+                    label: 'Số người',
+                    value: '${widget.numberOfCustomers}',
+                  ),
+                  SizedBox(height: 15),
+                  _buildInfoRow(
+                    icon: Icons.attach_money,
+                    label: 'Giá buffet',
+                    value: '$formattedBuffetPrice VNĐ/người',
+                  ),
+                  SizedBox(height: 15),
+                  Divider(color: Colors.grey[700], thickness: 1),
+                  SizedBox(height: 15),
+                  _buildInfoRow(
+                    icon: Icons.account_balance_wallet,
+                    label: 'Tổng tiền',
+                    value: '$formattedTotalAmount VNĐ',
+                    isTotal: true,
+                  ),
+                  SizedBox(height: 20),
+                  // Phần chọn phương thức thanh toán được cải thiện
+                  AnimatedContainer(
+                    duration: Duration(milliseconds: 200),
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[800]!.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.orange[400]!.withOpacity(0.5),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black54,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.payment, color: Colors.orange[400], size: 24),
+                            SizedBox(width: 12),
+                            Text(
+                              'Phương thức thanh toán',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: selectedPaymentMethod,
+                          decoration: InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            filled: true,
+                            fillColor: Colors.grey[850],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.orange[400]!.withOpacity(0.3)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.orange[400]!, width: 2),
+                            ),
+                          ),
+                          dropdownColor: Colors.grey[850],
+                          icon: Icon(Icons.arrow_drop_down, color: Colors.orange[400]),
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                          items: paymentMethods.map((String method) {
+                            return DropdownMenuItem<String>(
+                              value: method,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    method == 'Tiền mặt' ? Icons.money : Icons.qr_code,
+                                    color: Colors.orange[400],
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(_formatPaymentMethod(method)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: isLoading
+                              ? null
+                              : (String? newValue) {
+                            setState(() {
+                              selectedPaymentMethod = newValue;
+                              if (newValue == 'Chuyển khoản') {
+                                _showQrCodeDialog(context);
+                              }
+                            });
+                          },
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          selectedPaymentMethod == 'Tiền mặt'
+                              ? 'Vui lòng chuẩn bị tiền mặt để thanh toán.'
+                              : 'Quét mã QR để chuyển khoản qua Momo, VietQR hoặc ví điện tử.',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(context),
+                  child: Text(
+                    'Hủy',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[400],
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 5,
+                    shadowColor: Colors.orange[400]!.withOpacity(0.5),
+                  ),
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                    setState(() {
+                      isLoading = true;
+                    });
+
+                    try {
+                      await makePayment(totalAmount, selectedPaymentMethod!);
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Thanh toán thành công!'),
+                          backgroundColor: Colors.green[700],
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TableSelectionScreen(role: widget.role),
+                        ),
+                            (route) => false,
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(e.toString()),
+                          backgroundColor: Colors.red[700],
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                    } finally {
+                      setState(() {
+                        isLoading = false;
+                      });
+                    }
+                  },
+                  child: isLoading
+                      ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  )
+                      : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.black87, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Xác nhận',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         );
-        setState(() {
-          cart.clear();
-        });
-        Navigator.pop(context);
+      },
+    );
+  }
+
+  void _showQrCodeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.grey[900],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.orange[400]!.withOpacity(0.3), width: 1),
+          ),
+          elevation: 10,
+          contentPadding: EdgeInsets.all(20),
+          title: Row(
+            children: [
+              Icon(Icons.qr_code, color: Colors.orange[400], size: 28),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Quét QR để thanh toán',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black54,
+                      blurRadius: 5,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'image/qr.jpg',
+                  width: 350,
+                  height: 350,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              SizedBox(height: 15),
+              Text(
+                'Nhắn tiền từ Momo, VietQR, hoặc Ví điện tử',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Đóng',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatPaymentMethod(String method) {
+    switch (method) {
+      case 'Tiền mặt':
+        return 'Tiền mặt';
+      case 'Chuyển khoản':
+        return 'Chuyển khoản';
+      default:
+        return method;
+    }
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isTotal = false,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.orange[400], size: 24),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            '$label: ',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 16,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: isTotal ? Colors.orange[400] : Colors.white,
+            fontSize: 16,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> makePayment(double amount, String paymentMethod) async {
+    const String apiUrl = 'https://soa-deploy.up.railway.app/payment/';
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'session_id': widget.sessionId,
+          'amount': amount,
+          'payment_method': paymentMethod,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return;
+      } else {
+        final data = jsonDecode(response.body);
+        throw Exception(data['message'] ?? 'Lỗi khi thanh toán');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red[700]),
-      );
-    } finally {
-      setState(() {
-        isConfirmLoading = false;
-      });
+      throw Exception('Lỗi kết nối: $e');
     }
   }
 
@@ -281,7 +763,9 @@ class _MenuScreenState extends State<MenuScreen> {
                         );
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (context) => TableSelectionScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => TableSelectionScreen(role: widget.role),
+                          ),
                               (route) => false,
                         );
                       }
@@ -317,6 +801,45 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
+  List<String> getUniqueCategories() {
+    final categories = menuItems.map((item) => item['category'] as String).toSet().toList();
+    print('Danh mục: $categories');
+    return categories;
+  }
+
+  Future<void> confirmOrder(BuildContext context) async {
+    if (cart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Giỏ hàng trống!'), backgroundColor: Colors.red[700]),
+      );
+      return;
+    }
+    setState(() {
+      isConfirmLoading = true;
+    });
+
+    try {
+      final success = await ApiService.confirmOrder(widget.tableNumber, cart);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xác nhận đơn hàng thành công'), backgroundColor: Colors.green[700]),
+        );
+        setState(() {
+          cart.clear();
+        });
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red[700]),
+      );
+    } finally {
+      setState(() {
+        isConfirmLoading = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     print('Đóng kết nối WebSocket.');
@@ -333,6 +856,7 @@ class _MenuScreenState extends State<MenuScreen> {
       backgroundColor: Colors.grey[900],
       appBar: AppBar(
         backgroundColor: Colors.grey[850],
+        automaticallyImplyLeading: false,
         centerTitle: true,
         title: Text(
           'CHỌN MÓN - Bàn ${widget.tableNumber}',
@@ -375,7 +899,7 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
           IconButton(
             icon: Icon(Icons.exit_to_app, color: Colors.orange[400], size: 32),
-            onPressed: () => closeTable(context),
+            onPressed: () => _showSecretCodeDialog(context),
           ),
         ],
       ),
@@ -521,9 +1045,20 @@ class _MenuScreenState extends State<MenuScreen> {
                                       IconButton(
                                         icon: Icon(Icons.add_circle, color: Colors.green[700], size: 28),
                                         onPressed: () {
-                                          setState(() {
-                                            cart[index]['quantity'] = quantity + 1;
-                                          });
+                                          if (quantity < 5) {
+                                            setState(() {
+                                              cart[index]['quantity'] = quantity + 1;
+                                            });
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Số lượng tối đa mỗi lần gọi cho món ${item['name']} là 5!'),
+                                                backgroundColor: Colors.red[700],
+                                                behavior: SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
+                                            );
+                                          }
                                         },
                                       ),
                                     ],
@@ -548,9 +1083,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   minimumSize: Size(double.infinity, 60),
                 ),
-                onPressed: cart.isEmpty || isConfirmLoading
-                    ? null
-                    : () => confirmOrder(context),
+                onPressed: cart.isEmpty || isConfirmLoading ? null : () => confirmOrder(context),
                 child: isConfirmLoading
                     ? SizedBox(
                   width: 24,
@@ -613,12 +1146,12 @@ class _MenuScreenState extends State<MenuScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
             child: Wrap(
-              spacing: MediaQuery.of(context).size.width < 600 ? 4 : 8, // Khoảng cách ngang nhỏ hơn trên màn hình nhỏ
-              runSpacing: 8, // Khoảng cách dọc giữa các hàng
-              alignment: WrapAlignment.center, // Căn giữa danh mục
+              spacing: MediaQuery.of(context).size.width < 600 ? 4 : 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: List.generate(categories.length, (index) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2), // Giảm padding ngang
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: ChoiceChip(
                     label: Text(
                       categories[index],
@@ -630,7 +1163,7 @@ class _MenuScreenState extends State<MenuScreen> {
                     },
                     selectedColor: Colors.orange[400],
                     backgroundColor: Colors.grey[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // Giảm padding bên trong
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     labelStyle: TextStyle(
                       color: selectedCategoryIndex == index ? Colors.black87 : Colors.white70,
                       fontWeight: FontWeight.bold,
@@ -663,7 +1196,20 @@ class _MenuScreenState extends State<MenuScreen> {
                       setState(() {
                         int existingIndex = cart.indexWhere((cartItem) => cartItem['item_id'] == item['item_id']);
                         if (existingIndex != -1) {
-                          cart[existingIndex]['quantity'] = (cart[existingIndex]['quantity'] as int) + 1;
+                          int currentQuantity = cart[existingIndex]['quantity'] as int;
+                          if (currentQuantity < 5) {
+                            cart[existingIndex]['quantity'] = currentQuantity + 1;
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Số lượng tối đa cho món ${item['name']} là 5!'),
+                                backgroundColor: Colors.red[700],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                            return;
+                          }
                         } else {
                           cart.add({
                             'item_id': item['item_id'],
@@ -765,8 +1311,20 @@ class _MenuScreenState extends State<MenuScreen> {
                                           int existingIndex =
                                           cart.indexWhere((cartItem) => cartItem['item_id'] == item['item_id']);
                                           if (existingIndex != -1) {
-                                            cart[existingIndex]['quantity'] =
-                                                (cart[existingIndex]['quantity'] as int) + 1;
+                                            int currentQuantity = cart[existingIndex]['quantity'] as int;
+                                            if (currentQuantity < 5) {
+                                              cart[existingIndex]['quantity'] = currentQuantity + 1;
+                                            } else {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Số lượng tối đa cho món ${item['name']} là 5!'),
+                                                  backgroundColor: Colors.red[700],
+                                                  behavior: SnackBarBehavior.floating,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                ),
+                                              );
+                                              return;
+                                            }
                                           } else {
                                             cart.add({
                                               'item_id': item['item_id'],
@@ -804,21 +1362,8 @@ class _MenuScreenState extends State<MenuScreen> {
             color: Colors.grey[850],
             padding: EdgeInsets.all(16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.end, // Chỉ giữ nút Xem Giỏ
               children: [
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[700],
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {},
-                  icon: Icon(Icons.call, color: Colors.white, size: 24),
-                  label: Text(
-                    'Gọi Nhân Viên',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
                 Builder(
                   builder: (context) {
                     return ElevatedButton.icon(
