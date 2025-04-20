@@ -1639,18 +1639,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
               Navigator.pop(context);
             }),
         Divider(),
-        ListTile(
-            leading: Icon(Icons.dashboard_outlined, size: 20),
-            title: Text('Dashboard', style: TextStyle(fontSize: 14)),
-            onTap: () {
-              Navigator.pop(context);
-            }),
-        ListTile(
-            leading: Icon(Icons.settings_outlined, size: 20),
-            title: Text('Cài đặt', style: TextStyle(fontSize: 14)),
-            onTap: () {
-              Navigator.pop(context);
-            })
       ])),
       body: Padding(
         padding: EdgeInsets.all(kPagePadding),
