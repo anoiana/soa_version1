@@ -884,11 +884,58 @@ class _MenuScreenState extends State<MenuScreen> {
       ),
     );
   }
-
   AppBar _buildAppBar(ThemeData theme) {
     return AppBar(
-      title: const Text('KITCHEN'),
-      actions: _buildAppBarActions(theme),
+      title: const Text('BẾP'),
+      actions: [
+        ..._buildAppBarActions(theme), // Các actions hiện có
+        // Nút thoát
+        IconButton(
+          icon: Icon(Icons.exit_to_app, color: theme.iconTheme.color),
+          tooltip: 'Thoát',
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LoginScreen(),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLargeScreenHeader(ThemeData theme) {
+    return Container(
+      color: theme.appBarTheme.backgroundColor,
+      padding: const EdgeInsets.symmetric(
+          horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'BẾP',
+              textAlign: TextAlign.center,
+              style: theme.appBarTheme.titleTextStyle,
+            ),
+          ),
+          ..._buildAppBarActions(theme), // Các actions hiện có
+          // Nút thoát
+          IconButton(
+            icon: Icon(Icons.exit_to_app, color: theme.iconTheme.color),
+            tooltip: 'Thoát',
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LoginScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -903,23 +950,7 @@ class _MenuScreenState extends State<MenuScreen> {
       const SizedBox(width: kDefaultPadding / 2),
     ];
   }
-
-  Widget _buildLargeScreenHeader(ThemeData theme) {
-    return Container(
-      color: theme.appBarTheme.backgroundColor,
-      padding: const EdgeInsets.symmetric(
-          horizontal: kDefaultPadding * 2, vertical: kDefaultPadding * 1.5),
-      child: Row(
-        children: [
-          Expanded(
-              child: Text('KITCHEN',
-                  textAlign: TextAlign.center,
-                  style: theme.appBarTheme.titleTextStyle)),
-          ..._buildAppBarActions(theme),
-        ],
-      ),
-    );
-  }
+  
 
   Widget _buildAppDrawer(ThemeData theme) {
     bool isMenuSelected =
