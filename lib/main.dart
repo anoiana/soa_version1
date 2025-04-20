@@ -6,8 +6,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart'; // For groupBy
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
-import 'package:midterm/screens/signInScreen.dart';
-import 'package:midterm/screens/management_screen.dart';
+// import 'package:midterm/screens/management_screen.dart';
 import 'package:shimmer/shimmer.dart'; // Import Shimmer
 // import 'management_screen.dart'; // Assuming this exists
 
@@ -162,12 +161,7 @@ typedef TableClearedCallback = void Function(int tableNumber);
 typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
 void main() {
-  runApp(MaterialApp(
-    home: LoginScreen(),
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData.dark(
-    ),
-  ));
+  runApp(MyApp());
 }
 
 // --- Stateful MyApp for Theme Management ---
@@ -903,7 +897,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   AppBar _buildAppBar(ThemeData theme) {
     return AppBar(
-      title: const Text('WELCOME'),
+      title: const Text('KITCHEN'),
       actions: _buildAppBarActions(theme),
     );
   }
@@ -942,7 +936,7 @@ class _MenuScreenState extends State<MenuScreen> {
       child: Row(
         children: [
           Expanded(
-              child: Text('WELCOME',
+              child: Text('KITCHEN',
                   textAlign: TextAlign.center,
                   style: theme.appBarTheme.titleTextStyle)),
           ..._buildAppBarActions(theme),
@@ -1271,7 +1265,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildLogo({double height = kLogoHeight, double? width}) {
-    const String logoAssetPath = 'assets/spidermen.jpg';
+    const String logoAssetPath = 'image.png';
     return ClipRRect(
       borderRadius: BorderRadius.circular(kDefaultPadding * 0.75),
       child: Image.asset(

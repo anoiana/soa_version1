@@ -18,7 +18,7 @@ const double _colWidthStatus = 140.0;
 const double _colWidthDetails = 80.0;
 // Flex factors cho các cột Expanded
 const int _colFlexPaymentTime = 4; // TG Thanh Toán
-const int _colFlexPaymentMethod = 3; // **PT THANH TOÁN (Mới)**
+const int _colFlexPaymentMethod = 3; // PT THANH TOÁN
 const int _colFlexAmount = 3; // Tổng Tiền
 
 // --- Data Models ---
@@ -250,10 +250,10 @@ class PaymentHistoryResponse {
   }
 }
 
-// --- Hàm main và MyApp (Giữ nguyên Theme) ---
-void main() {
-  runApp(MyApp());
-}
+// --- Hàm main và MyApp ---
+// void main() {
+//   runApp(MyApp());
+// }
 
 class MyApp extends StatelessWidget {
   @override
@@ -302,12 +302,10 @@ class MyApp extends StatelessWidget {
             bodyMedium: TextStyle(color: Color(0xFF495057), fontSize: 12.5),
             bodySmall: TextStyle(color: Color(0xFF6C757D), fontSize: 10.5),
             labelMedium: TextStyle(
-                // Slightly bigger label for dialog
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF495057)),
             labelSmall: TextStyle(
-                // Keep for other uses if needed
                 color: Color(0xFF6C757D),
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500),
@@ -386,7 +384,6 @@ class MyApp extends StatelessWidget {
             thickness: 1,
           ),
           dialogTheme: DialogTheme(
-            // **Thêm styling cho Dialog**
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.0)),
             elevation: 4,
@@ -401,9 +398,8 @@ class MyApp extends StatelessWidget {
                 fontFamily: 'Poppins'),
           ),
           listTileTheme: ListTileThemeData(
-            // **Thêm styling cho ListTile (trong Dialog)**
             iconColor: Colors.blueGrey.shade400,
-            minLeadingWidth: 30, // Giảm khoảng cách icon và text
+            minLeadingWidth: 30,
           ),
           datePickerTheme: DatePickerThemeData(headerBackgroundColor: Colors.blueAccent.shade700, headerForegroundColor: Colors.white, backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: kCardElevation)),
       debugShowCheckedModeBanner: false,
@@ -422,12 +418,17 @@ class ManagementScreen extends StatefulWidget {
 class _ManagementScreenState extends State<ManagementScreen> {
   // --- State Variables ---
   int _currentViewIndex = 0;
-  DateTime? _selectedDateForHistory;
+
+  // History State
+  int? _selectedHistoryYear;
+  int? _selectedHistoryMonth; // null = All months
+  int? _selectedHistoryDay; // null = All days
   bool _isLoadingHistory = false;
   List<Payment> _historicalBills = [];
   String? _historyError;
   double _historyTotalRevenue = 0.0;
 
+  // Shift State
   bool _isLoadingShifts = true;
   String? _shiftError;
   List<Shift> _shifts = [];
@@ -447,22 +448,25 @@ class _ManagementScreenState extends State<ManagementScreen> {
   final DateFormat _timeFormatter = DateFormat('HH:mm');
   final DateFormat _fullDateTimeFormatter = DateFormat('HH:mm:ss dd/MM/yyyy');
   final DateFormat _dateTimeDetailFormatter = DateFormat('HH:mm dd/MM/yyyy');
-  final DateFormat _dateFormatter = DateFormat('dd/MM/yyyy');
+  final DateFormat _dateFormatter =
+      DateFormat('dd/MM/yyyy'); // Vẫn dùng để hiển thị ngày đã chọn nếu có
 
   // --- Constants for Table Layout ---
   final double _tableRowHeight = 50.0;
   final double _tableHeaderHeight = 40.0;
   final double _tableCellHorizontalPadding = 5.0;
 
+  // List of years for dropdown
+  final List<int> _years = List<int>.generate(
+      DateTime.now().year - 2019, (i) => DateTime.now().year - i);
+
   @override
   void initState() {
     super.initState();
+    _selectedHistoryYear =
+        DateTime.now().year; // Default to current year for history filter
     _fetchShifts();
-    // **SỬA LỖI TRUYỀN THAM SỐ:** Truyền context vào hàm _selectDateForHistory
-    // Gọi trong WidgetsBinding.instance.addPostFrameCallback để đảm bảo context sẵn sàng
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _selectDateForHistory(context, isInitialLoad: true);
-    });
+    _fetchPaymentHistory(); // Fetch history for the default year on init
   }
 
   @override
@@ -479,7 +483,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
   // --- Helper Methods ---
 
-  // **CẬP NHẬT _buildStatsGrid ĐỂ BỎ KIỂM TRA NULL KHÔNG CẦN THIẾT**
   Widget _buildStatsGrid(BuildContext context, ThemeData theme) {
     final kDefaultPadding = 12.0;
     return LayoutBuilder(builder: (context, constraints) {
@@ -654,19 +657,19 @@ class _ManagementScreenState extends State<ManagementScreen> {
           const Spacer(), // Spacer 2
           // TG THANH TOÁN (Expanded, Left Align) - cells[2]
           Expanded(
-            flex: _colFlexPaymentTime, // Cân đối flex
+            flex: _colFlexPaymentTime,
             child: buildCellWrapper(cells[2], Alignment.centerLeft),
           ),
           const Spacer(), // Spacer 3
           // PT THANH TOÁN (Expanded, Left Align) - cells[3]
           Expanded(
-            flex: _colFlexPaymentMethod, // Cân đối flex
+            flex: _colFlexPaymentMethod,
             child: buildCellWrapper(cells[3], Alignment.centerLeft),
           ),
           const Spacer(), // Spacer 4
           // TỔNG TIỀN (Expanded, Left Align) - cells[4]
           Expanded(
-            flex: _colFlexAmount, // Cân đối flex
+            flex: _colFlexAmount,
             child: buildCellWrapper(cells[4], Alignment.centerLeft),
           ),
           const Spacer(), // Spacer 5
@@ -810,7 +813,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
     print("Shift selected: $shiftId");
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setStateIfMounted(() {
-        // Cập nhật state đồng bộ trước
         _selectedShiftId = shiftId;
         _isLoadingShiftPayments = true;
         _isLoadingCustomerSummary = true;
@@ -821,7 +823,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
         _selectedShiftTotalSessions = 0;
         _fetchingDetailsForPaymentIds.clear();
       });
-      // Gọi fetch sau khi state đã được cập nhật
       _fetchPaymentsForShift(shiftId);
       _fetchShiftCustomerSummary(shiftId);
     });
@@ -861,7 +862,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
           print(
               "Fetched ${summary.payments.length} payments for shift $shiftId. Total: ${summary.totalRevenue}.");
         } else {
-          // Xử lý 404 và lỗi khác chung
           setStateIfMounted(() {
             _shiftPayments = [];
             _selectedShiftTotalRevenue = 0.0;
@@ -1043,25 +1043,38 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
-  // **CẬP NHẬT _fetchHistoricalBills thành _fetchPaymentHistory VÀ DÙNG API MỚI**
-  Future<void> _fetchPaymentHistory(DateTime selectedDate) async {
-    if (!mounted) return;
+  // **CẬP NHẬT HÀM FETCH LỊCH SỬ**
+  Future<void> _fetchPaymentHistory({int? year, int? month, int? day}) async {
+    // Sử dụng giá trị từ state nếu không có tham số nào được truyền vào
+    year ??= _selectedHistoryYear;
+    month ??= _selectedHistoryMonth;
+    day ??= _selectedHistoryDay;
+
+    if (year == null) {
+      setStateIfMounted(() {
+        _historyError = "Vui lòng chọn Năm để lọc.";
+        _isLoadingHistory = false; // Dừng loading nếu không có năm
+        _historicalBills = [];
+        _historyTotalRevenue = 0.0;
+      });
+      return;
+    }
+
     setStateIfMounted(() {
       _isLoadingHistory = true;
-      _historicalBills = []; // Clear list cũ
+      _historicalBills = [];
       _historyError = null;
-      _historyTotalRevenue = 0.0; // Reset total revenue
+      _historyTotalRevenue = 0.0;
     });
 
-    final year = selectedDate.year;
-    final month = selectedDate.month;
-    final day = selectedDate.day;
-
-    final Map<String, String> queryParams = {
-      'year': year.toString(),
-      'month': month.toString(),
-      'day': day.toString(),
-    };
+    final Map<String, String> queryParams = {'year': year.toString()};
+    if (month != null) {
+      queryParams['month'] = month.toString();
+    }
+    if (day != null && month != null) {
+      // Chỉ gửi ngày nếu có tháng
+      queryParams['day'] = day.toString();
+    }
 
     final url = Uri.parse('$BASE_API_URL/payment/history/')
         .replace(queryParameters: queryParams);
@@ -1092,7 +1105,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
           _historyError = null;
           _isLoadingHistory = false;
         });
-        print("No payment history found for the selected date (404).");
+        print("No payment history found for the selected period (404).");
       } else {
         setStateIfMounted(() {
           _historicalBills = [];
@@ -1109,42 +1122,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
         _historyTotalRevenue = 0.0;
         _historyError = 'Lỗi kết nối hoặc xử lý lịch sử.';
         _isLoadingHistory = false;
-      });
-    }
-  }
-
-  // **Bỏ hàm _generateDummyData**
-  // void _generateDummyData({DateTime? forDate}) { ... }
-
-  // **CẬP NHẬT _selectDateForHistory để gọi hàm fetch mới**
-  Future<void> _selectDateForHistory(BuildContext context,
-      {bool isInitialLoad = false}) async {
-    DateTime initial = _selectedDateForHistory ?? DateTime.now();
-    DateTime first = DateTime(2020);
-    DateTime last = DateTime.now();
-
-    DateTime? picked = initial;
-
-    if (!isInitialLoad) {
-      picked = await showDatePicker(
-          context: context,
-          initialDate: initial,
-          firstDate: first,
-          lastDate: last,
-          locale: const Locale('vi', 'VN'));
-    }
-
-    if (picked != null &&
-        (picked != _selectedDateForHistory || isInitialLoad)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        setStateIfMounted(() {
-          _selectedDateForHistory = picked;
-          _isLoadingHistory = true;
-          _historicalBills = [];
-          _historyError = null;
-          _historyTotalRevenue = 0.0;
-        });
-        _fetchPaymentHistory(picked!); // Gọi hàm fetch API thật
       });
     }
   }
@@ -1238,7 +1215,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
             onTap: () {
               if (_currentViewIndex != 1) {
                 setState(() => _currentViewIndex = 1);
-                // Không cần fetch ở đây nữa vì đã fetch trong initState hoặc khi chọn ngày
+                // Không cần fetch ở đây nữa vì đã fetch trong initState hoặc khi lọc
               }
               Navigator.pop(context);
             }),
@@ -1456,7 +1433,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               // 4: TỔNG TIỀN
               Text(_currencyFormatter.format(payment.amount)),
-              // 5: CHI TIẾT - **CẬP NHẬT onPressed VÀ CHILD**
+              // 5: CHI TIẾT
               OutlinedButton(
                 onPressed: isLoadingDetails
                     ? null
@@ -1543,44 +1520,142 @@ class _ManagementScreenState extends State<ManagementScreen> {
             Colors.blue.shade100;
     final dividerColor = theme.dividerTheme.color ?? Colors.grey.shade300;
     final dividerThickness = theme.dividerTheme.thickness ?? 1.0;
+    final kFilterSpacing = 10.0;
+
+    // Tạo danh sách tháng (1-12 và "Tất cả")
+    final List<DropdownMenuItem<int?>> monthItems = [
+      const DropdownMenuItem<int?>(value: null, child: Text("Tất cả tháng")),
+      ...List.generate(
+          12,
+          (i) => DropdownMenuItem<int?>(
+              value: i + 1, child: Text("Tháng ${i + 1}"))),
+    ];
+
+    // Tạo danh sách ngày (1-31 và "Tất cả" - chỉ hiển thị nếu tháng được chọn)
+    List<DropdownMenuItem<int?>> dayItems = [
+      const DropdownMenuItem<int?>(value: null, child: Text("Tất cả ngày")),
+    ];
+    if (_selectedHistoryMonth != null && _selectedHistoryYear != null) {
+      final daysInMonth = DateUtils.getDaysInMonth(
+          _selectedHistoryYear!, _selectedHistoryMonth!);
+      dayItems.addAll(List.generate(
+          daysInMonth,
+          (i) => DropdownMenuItem<int?>(
+              value: i + 1, child: Text("Ngày ${i + 1}"))));
+    }
 
     return Column(
       children: [
+        // **BỘ LỌC MỚI**
         Padding(
           padding: EdgeInsets.only(bottom: _tableCellHorizontalPadding * 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Wrap(
+            // Dùng Wrap để tự xuống dòng nếu không đủ chỗ
+            spacing: kFilterSpacing,
+            runSpacing: kFilterSpacing,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween, // Căn đều các item filter
             children: [
-              Expanded(
-                child: Text(
-                  _selectedDateForHistory == null
-                      ? 'Chọn ngày xem lịch sử:'
-                      : 'Lịch sử ngày: ${_dateFormatter.format(_selectedDateForHistory!)} (${_isLoadingHistory ? "Đang tải..." : "${_historicalBills.length} phiếu - ${_currencyFormatter.format(_historyTotalRevenue)}"})',
-                  style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
-                  overflow: TextOverflow.ellipsis,
-                ),
+              // Phần Text mô tả bộ lọc
+              Text(
+                _isLoadingHistory
+                    ? 'Đang tải lịch sử...'
+                    : 'Lịch sử (${_buildFilterDescription()}): ${_historicalBills.length} phiếu - ${_currencyFormatter.format(_historyTotalRevenue)}',
+                style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
               ),
-              SizedBox(width: _tableCellHorizontalPadding * 2),
-              ElevatedButton.icon(
-                onPressed: _isLoadingHistory
-                    ? null
-                    : () => _selectDateForHistory(context),
-                icon: const Icon(Icons.calendar_today, size: 16),
-                label: const Text('Chọn Ngày'),
-                style: theme.elevatedButtonTheme.style?.copyWith(
-                  padding: MaterialStateProperty.all(
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-                  textStyle: MaterialStateProperty.all(
-                    theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSecondary,
-                      fontSize: 12,
+
+              // Phần các Dropdown và nút Lọc
+              Row(
+                // Gom các dropdown và nút lọc lại
+                mainAxisSize: MainAxisSize.min, // Thu gọn Row
+                children: [
+                  // Dropdown Năm
+                  _buildHistoryFilterDropdown<int>(
+                    theme: theme,
+                    value: _selectedHistoryYear,
+                    items: _years
+                        .map((year) => DropdownMenuItem<int>(
+                            value: year, child: Text(year.toString())))
+                        .toList(),
+                    onChanged: (int? newValue) {
+                      if (newValue != null &&
+                          newValue != _selectedHistoryYear) {
+                        setState(() {
+                          _selectedHistoryYear = newValue;
+                          _selectedHistoryMonth = null;
+                          _selectedHistoryDay = null;
+                          // Không tự động lọc khi chỉ đổi năm
+                        });
+                      }
+                    },
+                  ),
+                  SizedBox(
+                      width: kFilterSpacing), // Khoảng cách giữa các dropdown
+
+                  // Dropdown Tháng
+                  _buildHistoryFilterDropdown<int?>(
+                    theme: theme,
+                    value: _selectedHistoryMonth,
+                    items: monthItems,
+                    onChanged: (int? newValue) {
+                      if (newValue != _selectedHistoryMonth) {
+                        setState(() {
+                          _selectedHistoryMonth = newValue;
+                          _selectedHistoryDay =
+                              null; // Reset ngày khi đổi tháng
+                        });
+                      }
+                    },
+                  ),
+                  SizedBox(width: kFilterSpacing),
+
+                  // Dropdown Ngày
+                  IgnorePointer(
+                    ignoring: _selectedHistoryMonth == null,
+                    child: Opacity(
+                      opacity: _selectedHistoryMonth == null ? 0.5 : 1.0,
+                      child: _buildHistoryFilterDropdown<int?>(
+                        theme: theme,
+                        value: _selectedHistoryDay,
+                        items: dayItems, // Danh sách ngày được cập nhật ở trên
+                        onChanged: _selectedHistoryMonth == null
+                            ? null
+                            : (int? newValue) {
+                                // Chỉ cho phép thay đổi nếu đã chọn tháng
+                                if (newValue != _selectedHistoryDay) {
+                                  setState(() {
+                                    _selectedHistoryDay = newValue;
+                                  });
+                                }
+                              },
+                      ),
                     ),
                   ),
-                ),
+                  SizedBox(width: kFilterSpacing),
+
+                  // Nút Lọc
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.filter_list, size: 16),
+                    label: Text('Lọc'),
+                    onPressed: _isLoadingHistory
+                        ? null
+                        : () =>
+                            _fetchPaymentHistory(), // Gọi fetch khi nhấn nút
+                    style: theme.elevatedButtonTheme.style?.copyWith(
+                      padding: MaterialStateProperty.all(EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8)), // Nút nhỏ hơn
+                      textStyle: MaterialStateProperty.all(
+                          theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
+        // Phần Bảng dữ liệu
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
@@ -1608,10 +1683,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     color: dividerColor),
                 Expanded(
                   child: RefreshIndicator(
-                    onRefresh: (_selectedDateForHistory == null ||
+                    onRefresh: (_selectedHistoryYear == null ||
                             _isLoadingHistory)
                         ? () async {}
-                        : () => _fetchPaymentHistory(_selectedDateForHistory!),
+                        : () =>
+                            _fetchPaymentHistory(), // Kéo để refresh theo bộ lọc hiện tại
                     color: theme.colorScheme.secondary,
                     backgroundColor: theme.cardTheme.color ?? Colors.white,
                     child: _buildHistoryBillsContent(theme),
@@ -1647,6 +1723,55 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
+  // **Hàm helper để tạo Dropdown cho bộ lọc**
+  Widget _buildHistoryFilterDropdown<T>({
+    required ThemeData theme,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      height: 38,
+      padding: EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+          color: theme.inputDecorationTheme.fillColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color:
+                  theme.inputDecorationTheme.enabledBorder?.borderSide.color ??
+                      Colors.grey)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          items: items,
+          onChanged:
+              _isLoadingHistory ? null : onChanged, // Disable khi đang loading
+          style: theme.textTheme.bodyMedium,
+          icon: Icon(Icons.arrow_drop_down,
+              size: 20, color: _isLoadingHistory ? Colors.grey : null),
+          isExpanded: false,
+          focusColor: Colors.transparent,
+          // Thêm các thuộc tính để làm dropdown nhỏ gọn hơn nếu cần
+          // itemHeight: 48, // Chiều cao mặc định của item
+          // menuMaxHeight: 300, // Giới hạn chiều cao menu xổ xuống
+        ),
+      ),
+    );
+  }
+
+  // **Hàm helper để tạo mô tả bộ lọc hiện tại**
+  String _buildFilterDescription() {
+    if (_selectedHistoryYear == null) return "Chưa chọn";
+    String desc = _selectedHistoryYear.toString();
+    if (_selectedHistoryMonth != null) {
+      desc += "/${_selectedHistoryMonth.toString().padLeft(2, '0')}";
+      if (_selectedHistoryDay != null) {
+        desc += "/${_selectedHistoryDay.toString().padLeft(2, '0')}";
+      }
+    }
+    return desc;
+  }
+
   // --- Helper to build content inside RefreshIndicator for History Bills ---
   Widget _buildHistoryBillsContent(ThemeData theme) {
     final dividerColor = theme.dividerTheme.color ?? Colors.grey.shade300;
@@ -1655,10 +1780,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     // --- Handle Loading, Error, Empty States ---
     if (_isLoadingHistory && _historicalBills.isEmpty) {
+      // Chỉ hiện loading toàn màn hình khi list rỗng
       return Center(
           child: CircularProgressIndicator(color: theme.colorScheme.secondary));
     }
-    // Bỏ kiểm tra selectedDateForHistory == null vì mặc định đã load ngày hôm nay
+    // Bỏ kiểm tra selectedDateForHistory == null
     if (_historyError != null) {
       return Center(
         child: Padding(
@@ -1668,7 +1794,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 textAlign: TextAlign.center)),
       );
     }
-    // Hiển thị empty khi load xong, không lỗi, và list rỗng (ngày chắc chắn đã được chọn)
+    // Hiển thị empty khi load xong, không lỗi, và list rỗng
     if (!_isLoadingHistory &&
         _historyError == null &&
         _historicalBills.isEmpty) {
@@ -1680,8 +1806,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
             child: Center(
               child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text('Không có phiếu cho ngày đã chọn.',
-                      style: theme.textTheme.bodyMedium)),
+                  child: Text('Không có phiếu cho khoảng thời gian đã chọn.',
+                      style: theme.textTheme.bodyMedium)), // Đổi text empty
             ),
           ),
         ),
