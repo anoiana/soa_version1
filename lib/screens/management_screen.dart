@@ -478,7 +478,7 @@ class MyApp extends StatelessWidget {
                 ),
                 datePickerTheme: DatePickerThemeData(headerBackgroundColor: Colors.blueAccent.shade700, headerForegroundColor: Colors.white, backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: kCardElevation)),
             debugShowCheckedModeBanner: false,
-            home: ManagementScreen(), // Widget chính của bạn
+            home: ManagementScreen(role: 'Quản lý',), // Widget chính của bạn
           );
         }
       },
@@ -1577,34 +1577,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 ),
               ); // Quay lại trang trước
             },
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: kPagePadding / 1.5)
-                .copyWith(right: kPagePadding),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: Colors.grey.shade300,
-                  child: Icon(Icons.person_outline,
-                      color: Colors.grey.shade700, size: 20),
-                  radius: 16,
-                ),
-                SizedBox(width: 8),
-                if (MediaQuery.of(context).size.width > 600)
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Thu Ngân 1',
-                          style: theme.appBarTheme.titleTextStyle
-                              ?.copyWith(fontSize: 13)),
-                      Text('ID: 12345',
-                          style: theme.textTheme.labelSmall
-                              ?.copyWith(fontSize: 10.5)),
-                    ],
-                  ),
-              ],
-            ),
           ),
         ],
       ),
