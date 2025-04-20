@@ -216,11 +216,6 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                   icon: Icon(Icons.fastfood, color: Colors.orange[400]),
                   label: Text('Chọn Buffet'),
                 ),
-                if (widget.role != 'Nhân viên phục vụ') // Ẩn mục "Xem Thống Kê" nếu role là Nhân viên phục vụ
-                  NavigationRailDestination(
-                    icon: Icon(Icons.bar_chart, color: Colors.white70),
-                    label: Text('Xem Thống Kê'),
-                  ),
               ],
             ),
           Expanded(
