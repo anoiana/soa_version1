@@ -621,13 +621,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
         isHistoryView ? historyCustomersChange : '';
     final String displaySessionsChange =
         isHistoryView ? historySessionsChange : '';
-    final String billsTitle =
-        isHistoryView ? 'Tổng phiếu (Lọc)' : 'Tổng phiếu (Ca)';
-    final String revenueTitle =
-        isHistoryView ? 'Doanh thu (Lọc)' : 'Doanh thu (Ca)';
-    final String customersTitle = isHistoryView ? 'Khách (Lọc)' : 'Khách (Ca)';
+    final String billsTitle = isHistoryView ? 'Tổng phiếu' : 'Tổng phiếu (Ca)';
+    final String revenueTitle = isHistoryView ? 'Doanh thu' : 'Doanh thu (Ca)';
+    final String customersTitle = isHistoryView ? 'Khách' : 'Khách (Ca)';
     final String sessionsTitle =
-        isHistoryView ? 'Tổng số phiên (Lọc)' : 'Tổng số phiên (Ca)';
+        isHistoryView ? 'Tổng số phiên' : 'Tổng số phiên (Ca)';
 
     return LayoutBuilder(builder: (context, constraints) {
       int crossAxisCount = 4;
