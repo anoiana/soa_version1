@@ -278,10 +278,10 @@ class HistoryCustomerSummary {
 }
 
 // --- Hàm main và MyApp ---
-void main() {
-  // **TRẢ LẠI HÀM MAIN GỐC**
-  runApp(MyApp());
-}
+// void main() {
+//   // **TRẢ LẠI HÀM MAIN GỐC**
+//   runApp(MyApp());
+// }
 
 class MyApp extends StatelessWidget {
   // **SỬ DỤNG FUTUREBUILDER ĐỂ KHỞI TẠO LOCALE**

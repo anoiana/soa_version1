@@ -160,9 +160,9 @@ typedef OrderUpdateCallback = void Function(
 typedef TableClearedCallback = void Function(int tableNumber);
 typedef ThemeChangeCallback = void Function(ThemeMode themeMode);
 
-// void main() {
-//   runApp(MyApp());
-// }
+void main() {
+  runApp(MyApp());
+}
 
 // --- Stateful MyApp for Theme Management ---
 class MyApp extends StatefulWidget {
