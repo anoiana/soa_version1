@@ -9,8 +9,16 @@ import 'package:intl/intl.dart';
 
 class BuffetSelectionScreen extends StatefulWidget {
   final int tableNumber;
+  final int numberOfCustomers;
+  final int sessionId;
+  final String role;
 
-  BuffetSelectionScreen({required this.tableNumber});
+  BuffetSelectionScreen({
+    required this.tableNumber,
+    required this.numberOfCustomers,
+    required this.sessionId,
+    required this.role,
+  });
 
   @override
   _BuffetSelectionScreenState createState() => _BuffetSelectionScreenState();
@@ -114,7 +122,9 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                         );
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (context) => TableSelectionScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => TableSelectionScreen(role: widget.role),
+                          ),
                               (route) => false, // Xóa toàn bộ stack
                         );
                       }
@@ -206,10 +216,11 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                   icon: Icon(Icons.fastfood, color: Colors.orange[400]),
                   label: Text('Chọn Buffet'),
                 ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.info, color: Colors.white70),
-                  label: Text('Thông Tin'),
-                ),
+                if (widget.role != 'Nhân viên phục vụ') // Ẩn mục "Xem Thống Kê" nếu role là Nhân viên phục vụ
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bar_chart, color: Colors.white70),
+                    label: Text('Xem Thống Kê'),
+                  ),
               ],
             ),
           Expanded(
@@ -306,6 +317,10 @@ class _BuffetSelectionScreenState extends State<BuffetSelectionScreen> {
                                     builder: (context) => MenuScreen(
                                       packageId: buffetTypes[index]['package_id'],
                                       tableNumber: widget.tableNumber,
+                                      numberOfCustomers: widget.numberOfCustomers,
+                                      buffetPrice: buffetTypes[index]['price_per_person'],
+                                      sessionId: widget.sessionId,
+                                      role: widget.role, // Truyền role vào MenuScreen
                                     ),
                                   ),
                                 );
