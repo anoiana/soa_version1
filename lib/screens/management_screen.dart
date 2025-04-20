@@ -9,7 +9,8 @@ import 'package:intl/intl.dart'; // Để định dạng ngày và tiền tệ
 
 // --- Constants ---
 const double kCardElevation = 1.0;
-const String BASE_API_URL = "https://soa-deploy.up.railway.app";
+const String BASE_API_URL =
+    "https://soa-deploy.up.railway.app"; // Make sure this is correct
 
 // Define fixed column widths ONLY
 const double _colWidthId = 70.0;
@@ -20,7 +21,7 @@ const int _colFlexPaymentTime = 4; // TG Thanh Toán
 const int _colFlexPaymentMethod = 3; // **PT THANH TOÁN (Mới)**
 const int _colFlexAmount = 3; // Tổng Tiền
 
-// --- Data Models (Giữ nguyên) ---
+// --- Data Models ---
 class Shift {
   final int shiftId;
   final DateTime startTime;
@@ -60,7 +61,9 @@ class Payment {
   final DateTime? creationTime; // Vẫn giữ lại trong model nếu API trả về
   final String paymentMethod; // Đã có sẵn
   final int? tableSessionId;
-  final int? tableNumber;
+  final int? tableNumber; // This might be redundant if details API provides it
+  final int? numberOfCustomersDirect;
+
   Payment(
       {required this.paymentId,
       required this.amount,
@@ -68,7 +71,8 @@ class Payment {
       this.creationTime,
       required this.paymentMethod,
       this.tableSessionId,
-      this.tableNumber});
+      this.tableNumber,
+      this.numberOfCustomersDirect});
 
   factory Payment.fromJson(Map<String, dynamic> json) {
     DateTime? parseDt(String? dtString) {
@@ -82,6 +86,13 @@ class Payment {
         print("Error parsing payment date '$dtString': $e");
         return null;
       }
+    }
+
+    int? parseIntSafe(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
     }
 
     final id = json['payment_id'] as int? ?? json['id'] as int? ?? 0;
@@ -99,7 +110,8 @@ class Payment {
         paymentMethod: json['payment_method'] as String? ??
             'Tiền mặt', // Lấy PT Thanh Toán
         tableSessionId: json['table_session_id'] as int?,
-        tableNumber: json['table_number'] as int?);
+        tableNumber: parseIntSafe(json['table_number']), // Parse an toàn
+        numberOfCustomersDirect: parseIntSafe(json['number_of_customers']));
   }
 }
 
@@ -124,6 +136,120 @@ class ShiftPaymentSummary {
   }
 }
 
+// **Data Model for Payment Details**
+class PaymentDetail {
+  final int paymentId;
+  final int? tableNumber;
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final int? numberOfCustomers;
+  final String buffetPackage;
+
+  PaymentDetail({
+    required this.paymentId,
+    this.tableNumber,
+    this.startTime,
+    this.endTime,
+    this.numberOfCustomers,
+    required this.buffetPackage,
+  });
+
+  factory PaymentDetail.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDt(String? dtString) {
+      if (dtString == null) return null;
+      try {
+        if (dtString.endsWith('Z')) {
+          return DateTime.parse(dtString).toLocal();
+        }
+        return DateTime.tryParse(dtString)?.toLocal();
+      } catch (e) {
+        print("Error parsing detail date '$dtString': $e");
+        return null;
+      }
+    }
+
+    int? parseIntSafe(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) {
+        return int.tryParse(value);
+      }
+      return null;
+    }
+
+    return PaymentDetail(
+      paymentId: json['payment_id'] as int? ?? 0,
+      tableNumber: parseIntSafe(json['table_number']),
+      startTime: parseDt(json['start_time'] as String?),
+      endTime: parseDt(json['end_time'] as String?),
+      numberOfCustomers: parseIntSafe(json['number_of_customers']),
+      buffetPackage: json['buffet_package'] as String? ?? "Không có",
+    );
+  }
+}
+
+// **NEW Data Model for Shift Customer Summary**
+class ShiftCustomerSummary {
+  final int shiftId;
+  final int totalCustomers; // **Kiểu int (không nullable)**
+  final int totalSessions; // **Kiểu int (không nullable)**
+
+  ShiftCustomerSummary({
+    required this.shiftId,
+    required this.totalCustomers,
+    required this.totalSessions,
+  });
+
+  factory ShiftCustomerSummary.fromJson(Map<String, dynamic> json) {
+    int parseIntSafe(dynamic value) {
+      if (value == null) return 0;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value) ?? 0;
+      return 0; // Mặc định là 0 nếu kiểu không hợp lệ
+    }
+
+    return ShiftCustomerSummary(
+      shiftId: parseIntSafe(json['shift_id']),
+      totalCustomers: parseIntSafe(json['total_customers']),
+      totalSessions: parseIntSafe(json['total_sessions']),
+    );
+  }
+}
+
+// **NEW Data Model for Payment History Response**
+class PaymentHistoryResponse {
+  final int year;
+  final int? month;
+  final int? day;
+  final double totalRevenue;
+  final List<Payment> payments;
+
+  PaymentHistoryResponse({
+    required this.year,
+    this.month,
+    this.day,
+    required this.totalRevenue,
+    required this.payments,
+  });
+
+  factory PaymentHistoryResponse.fromJson(Map<String, dynamic> json) {
+    var paymentList = json['payments'] as List? ?? [];
+    List<Payment> parsedPayments = paymentList
+        .map((p) => Payment.fromJson(p as Map<String, dynamic>))
+        .where((p) =>
+            p.paymentTime.year > 1970) // Vẫn kiểm tra payment time hợp lệ
+        .toList();
+
+    return PaymentHistoryResponse(
+      year: json['year'] as int? ?? 0,
+      month: json['month'] as int?, // Month có thể null
+      day: json['day'] as int?, // Day có thể null
+      totalRevenue: (json['total_revenue'] as num? ?? 0.0).toDouble(),
+      payments: parsedPayments,
+    );
+  }
+}
+
 // --- Hàm main và MyApp (Giữ nguyên Theme) ---
 void main() {
   runApp(MyApp());
@@ -132,7 +258,6 @@ void main() {
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Theme definition remains the same
     return MaterialApp(
       title: 'POS Management',
       theme: ThemeData(
@@ -162,28 +287,31 @@ class MyApp extends StatelessWidget {
                   fontSize: 12.5,
                   fontFamily: 'Poppins')),
           textTheme: TextTheme(
-              titleLarge: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF212529)),
-              titleMedium: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF343A40)),
-              titleSmall: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF343A40)),
-              bodyMedium: TextStyle(color: Color(0xFF495057), fontSize: 12.5),
-              bodySmall: TextStyle(color: Color(0xFF6C757D), fontSize: 10.5),
-              labelSmall: TextStyle(
-                  color: Color(0xFF6C757D),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500),
-              labelMedium: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF495057))),
+            titleLarge: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF212529)),
+            titleMedium: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF343A40)),
+            titleSmall: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF343A40)),
+            bodyMedium: TextStyle(color: Color(0xFF495057), fontSize: 12.5),
+            bodySmall: TextStyle(color: Color(0xFF6C757D), fontSize: 10.5),
+            labelMedium: TextStyle(
+                // Slightly bigger label for dialog
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF495057)),
+            labelSmall: TextStyle(
+                // Keep for other uses if needed
+                color: Color(0xFF6C757D),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500),
+          ),
           inputDecorationTheme: InputDecorationTheme(
               filled: true,
               fillColor: Color(0xFFF1F3F5),
@@ -243,14 +371,39 @@ class MyApp extends StatelessWidget {
                   foregroundColor: Colors.blueAccent.shade700,
                   side: BorderSide(
                       color: Colors.blueAccent.shade700.withOpacity(0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0)),
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  textStyle: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13))),
-          textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: Colors.blueAccent.shade700, padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10), textStyle: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13))),
+                  textStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13))),
+          textButtonTheme:
+              TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: Colors.blueAccent.shade700, padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10), textStyle: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13))),
           appBarTheme: AppBarTheme(elevation: 0, backgroundColor: Colors.white, iconTheme: IconThemeData(color: Color(0xFF495057)), actionsIconTheme: IconThemeData(color: Color(0xFF495057)), titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Color(0xFF343A40), fontFamily: 'Poppins')),
           dividerTheme: DividerThemeData(
             color: Colors.grey.shade300,
             thickness: 1,
+          ),
+          dialogTheme: DialogTheme(
+            // **Thêm styling cho Dialog**
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0)),
+            elevation: 4,
+            titleTextStyle: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF343A40),
+                fontFamily: 'Poppins'),
+            contentTextStyle: TextStyle(
+                color: Color(0xFF495057),
+                fontSize: 13.5,
+                fontFamily: 'Poppins'),
+          ),
+          listTileTheme: ListTileThemeData(
+            // **Thêm styling cho ListTile (trong Dialog)**
+            iconColor: Colors.blueGrey.shade400,
+            minLeadingWidth: 30, // Giảm khoảng cách icon và text
           ),
           datePickerTheme: DatePickerThemeData(headerBackgroundColor: Colors.blueAccent.shade700, headerForegroundColor: Colors.white, backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: kCardElevation)),
       debugShowCheckedModeBanner: false,
@@ -267,12 +420,14 @@ class ManagementScreen extends StatefulWidget {
 }
 
 class _ManagementScreenState extends State<ManagementScreen> {
-  // --- State Variables (Giữ nguyên) ---
+  // --- State Variables ---
   int _currentViewIndex = 0;
-  DateTime? _selectedDate;
+  DateTime? _selectedDateForHistory;
   bool _isLoadingHistory = false;
   List<Payment> _historicalBills = [];
   String? _historyError;
+  double _historyTotalRevenue = 0.0;
+
   bool _isLoadingShifts = true;
   String? _shiftError;
   List<Shift> _shifts = [];
@@ -281,23 +436,33 @@ class _ManagementScreenState extends State<ManagementScreen> {
   String? _paymentError;
   List<Payment> _shiftPayments = [];
   double _selectedShiftTotalRevenue = 0.0;
+  final Set<int> _fetchingDetailsForPaymentIds = {};
+  int _selectedShiftTotalCustomers = 0;
+  int _selectedShiftTotalSessions = 0;
+  bool _isLoadingCustomerSummary = false;
 
   // Formatters
   final NumberFormat _currencyFormatter =
       NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
   final DateFormat _timeFormatter = DateFormat('HH:mm');
   final DateFormat _fullDateTimeFormatter = DateFormat('HH:mm:ss dd/MM/yyyy');
+  final DateFormat _dateTimeDetailFormatter = DateFormat('HH:mm dd/MM/yyyy');
   final DateFormat _dateFormatter = DateFormat('dd/MM/yyyy');
 
   // --- Constants for Table Layout ---
   final double _tableRowHeight = 50.0;
   final double _tableHeaderHeight = 40.0;
-  final double _tableCellHorizontalPadding = 5.0; // Padding bên trong cell
+  final double _tableCellHorizontalPadding = 5.0;
 
   @override
   void initState() {
     super.initState();
     _fetchShifts();
+    // **SỬA LỖI TRUYỀN THAM SỐ:** Truyền context vào hàm _selectDateForHistory
+    // Gọi trong WidgetsBinding.instance.addPostFrameCallback để đảm bảo context sẵn sàng
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectDateForHistory(context, isInitialLoad: true);
+    });
   }
 
   @override
@@ -305,8 +470,16 @@ class _ManagementScreenState extends State<ManagementScreen> {
     super.dispose();
   }
 
+  // Helper to safely call setState only if the widget is still mounted
+  void setStateIfMounted(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    }
+  }
+
   // --- Helper Methods ---
 
+  // **CẬP NHẬT _buildStatsGrid ĐỂ BỎ KIỂM TRA NULL KHÔNG CẦN THIẾT**
   Widget _buildStatsGrid(BuildContext context, ThemeData theme) {
     final kDefaultPadding = 12.0;
     return LayoutBuilder(builder: (context, constraints) {
@@ -316,7 +489,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       if (constraints.maxWidth < 500) crossAxisCount = 1;
       double childAspectRatio = 2.4;
       if (crossAxisCount == 2) childAspectRatio = 2.8;
-      if (crossAxisCount == 1) childAspectRatio = 4.0;
+      if (crossAxisCount == 1) childAspectRatio = 3.5;
       final double crossAxisSpacing = kDefaultPadding;
       final double mainAxisSpacing = kDefaultPadding;
       return GridView.count(
@@ -332,7 +505,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 icon: Icons.receipt_long,
                 iconColor: Colors.green.shade600,
                 title: 'Tổng phiếu (Ca)',
-                value: _shiftPayments.length.toString(),
+                value: _isLoadingShiftPayments && _shiftPayments.isEmpty
+                    ? '...'
+                    : _shiftPayments.length.toString(),
                 change: '',
                 changeColor: Colors.transparent,
                 comparisonText: 'Trong ca hiện tại'),
@@ -341,7 +516,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 icon: Icons.attach_money,
                 iconColor: Colors.blue.shade600,
                 title: 'Doanh thu (Ca)',
-                value: _currencyFormatter.format(_selectedShiftTotalRevenue),
+                value:
+                    _isLoadingShiftPayments && _selectedShiftTotalRevenue == 0.0
+                        ? '...'
+                        : _currencyFormatter.format(_selectedShiftTotalRevenue),
                 change: '',
                 changeColor: Colors.transparent,
                 comparisonText: 'Trong ca hiện tại'),
@@ -350,19 +528,23 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 icon: Icons.people_alt_outlined,
                 iconColor: Colors.orange.shade700,
                 title: 'Khách (Ước tính)',
-                value: '...',
+                value: _isLoadingCustomerSummary
+                    ? '...'
+                    : _selectedShiftTotalCustomers.toString(),
                 change: '',
                 changeColor: Colors.transparent,
-                comparisonText: 'Chưa tính'),
+                comparisonText: 'Trong ca hiện tại'),
             _buildStatCard(
                 theme: theme,
-                icon: Icons.access_time_filled,
+                icon: Icons.table_restaurant_outlined,
                 iconColor: Colors.purple.shade600,
-                title: 'Thời gian còn lại (Ca)',
-                value: '...',
+                title: 'Tổng số phiên (Ca)',
+                value: _isLoadingCustomerSummary
+                    ? '...'
+                    : _selectedShiftTotalSessions.toString(),
                 change: '',
                 changeColor: Colors.transparent,
-                comparisonText: 'Chưa tính')
+                comparisonText: 'Trong ca hiện tại'),
           ]);
     });
   }
@@ -543,7 +725,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   // --- Fetch Functions ---
   Future<void> _fetchShifts() async {
     if (!mounted) return;
-    setState(() {
+    setStateIfMounted(() {
       _isLoadingShifts = true;
       _shiftError = null;
       _shifts = [];
@@ -551,6 +733,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
       _shiftPayments = [];
       _selectedShiftTotalRevenue = 0.0;
       _paymentError = null;
+      _selectedShiftTotalCustomers = 0;
+      _selectedShiftTotalSessions = 0;
+      _isLoadingCustomerSummary = false;
     });
     print("Fetching shifts...");
     final url = Uri.parse('$BASE_API_URL/shifts/');
@@ -564,37 +749,35 @@ class _ManagementScreenState extends State<ManagementScreen> {
             .where((s) => s.startTime.year > 1970)
             .toList();
         fetchedShifts.sort((a, b) => a.startTime.compareTo(b.startTime));
-        if (mounted) {
-          setState(() {
-            _shifts = fetchedShifts;
-            _isLoadingShifts = false;
-            _shiftError = null;
-            _autoSelectCurrentOrLatestShift();
-          });
-        }
+
+        setStateIfMounted(() {
+          _shifts = fetchedShifts;
+          _isLoadingShifts = false;
+          _shiftError = null;
+        });
+        _autoSelectCurrentOrLatestShift();
+
         print("Fetched ${_shifts.length} valid shifts.");
       } else {
-        if (mounted) {
-          setState(() {
-            _shiftError = 'Lỗi tải ca (${response.statusCode})';
-            _isLoadingShifts = false;
-          });
-        }
+        setStateIfMounted(() {
+          _shiftError = 'Lỗi tải ca (${response.statusCode})';
+          _isLoadingShifts = false;
+        });
         print("Error fetching shifts: ${response.statusCode}");
       }
     } catch (e) {
       print("Exception fetching shifts: $e");
-      if (mounted)
-        setState(() {
-          _shiftError = 'Lỗi kết nối hoặc xử lý dữ liệu ca.';
-          _isLoadingShifts = false;
-        });
+      setStateIfMounted(() {
+        _shiftError = 'Lỗi kết nối hoặc xử lý dữ liệu ca.';
+        _isLoadingShifts = false;
+      });
     }
   }
 
   void _autoSelectCurrentOrLatestShift() {
     if (_shifts.isEmpty) {
       print("No shifts available to auto-select.");
+      if (_isLoadingShifts) setStateIfMounted(() => _isLoadingShifts = false);
       return;
     }
     final now = DateTime.now();
@@ -604,35 +787,43 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     if (_selectedShiftId != shiftToSelect.shiftId ||
         (_selectedShiftId == shiftToSelect.shiftId &&
-            _shiftPayments.isEmpty &&
-            !_isLoadingShiftPayments &&
-            _paymentError == null)) {
+            ((_shiftPayments.isEmpty &&
+                    !_isLoadingShiftPayments &&
+                    _paymentError == null) ||
+                (!_isLoadingCustomerSummary &&
+                    _selectedShiftTotalSessions == 0)))) {
       print("Auto-selecting or re-selecting shift: ${shiftToSelect.shiftId}");
       _selectShift(shiftToSelect.shiftId);
     } else {
       print(
-          "Shift ${shiftToSelect.shiftId} already selected/current and has payments or is loading.");
+          "Shift ${shiftToSelect.shiftId} already selected/current and has data or is loading.");
     }
   }
 
   void _selectShift(int shiftId) {
-    if (_selectedShiftId == shiftId && _isLoadingShiftPayments) {
-      print("Shift $shiftId is already loading payments. Selection ignored.");
+    if (_selectedShiftId == shiftId &&
+        (_isLoadingShiftPayments || _isLoadingCustomerSummary)) {
+      print("Shift $shiftId is already loading data. Selection ignored.");
       return;
     }
 
     print("Shift selected: $shiftId");
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {
-          _selectedShiftId = shiftId;
-          _isLoadingShiftPayments = true;
-          _shiftPayments = [];
-          _selectedShiftTotalRevenue = 0.0;
-          _paymentError = null;
-        });
-      }
+      setStateIfMounted(() {
+        // Cập nhật state đồng bộ trước
+        _selectedShiftId = shiftId;
+        _isLoadingShiftPayments = true;
+        _isLoadingCustomerSummary = true;
+        _shiftPayments = [];
+        _selectedShiftTotalRevenue = 0.0;
+        _paymentError = null;
+        _selectedShiftTotalCustomers = 0;
+        _selectedShiftTotalSessions = 0;
+        _fetchingDetailsForPaymentIds.clear();
+      });
+      // Gọi fetch sau khi state đã được cập nhật
       _fetchPaymentsForShift(shiftId);
+      _fetchShiftCustomerSummary(shiftId);
     });
   }
 
@@ -640,14 +831,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
     if (!mounted) return;
 
     if (_selectedShiftId == shiftId && !_isLoadingShiftPayments) {
-      if (mounted) {
-        setState(() => _isLoadingShiftPayments = true);
-      } else {
-        return;
-      }
+      setStateIfMounted(() => _isLoadingShiftPayments = true);
     } else if (_selectedShiftId != shiftId) {
       print(
-          "Fetch for shift $shiftId aborted, selection changed to $_selectedShiftId");
+          "Fetch payments for shift $shiftId aborted, selection changed to $_selectedShiftId");
       return;
     }
 
@@ -659,43 +846,32 @@ class _ManagementScreenState extends State<ManagementScreen> {
       if (!mounted) return;
 
       if (_selectedShiftId == shiftId) {
-        // Re-check after await
         if (response.statusCode == 200) {
           final data = jsonDecode(utf8.decode(response.bodyBytes));
           final summary = ShiftPaymentSummary.fromJson(data);
           summary.payments
               .sort((a, b) => b.paymentTime.compareTo(a.paymentTime));
-          if (mounted) {
-            setState(() {
-              _shiftPayments = summary.payments;
-              _selectedShiftTotalRevenue = summary.totalRevenue;
-              _paymentError = null;
-              _isLoadingShiftPayments = false;
-            });
-          }
+
+          setStateIfMounted(() {
+            _shiftPayments = summary.payments;
+            _selectedShiftTotalRevenue = summary.totalRevenue;
+            _paymentError = null;
+            _isLoadingShiftPayments = false;
+          });
           print(
-              "Fetched ${summary.payments.length} payments for shift $shiftId. Total: ${summary.totalRevenue}");
-        } else if (response.statusCode == 404) {
-          if (mounted) {
-            setState(() {
-              _shiftPayments = [];
-              _selectedShiftTotalRevenue = 0.0;
-              _paymentError = null;
-              _isLoadingShiftPayments = false;
-            });
-          }
-          print("No payments found for shift $shiftId (404).");
+              "Fetched ${summary.payments.length} payments for shift $shiftId. Total: ${summary.totalRevenue}.");
         } else {
-          if (mounted) {
-            setState(() {
-              _paymentError = 'Lỗi tải phiếu (${response.statusCode})';
-              _isLoadingShiftPayments = false;
-              _shiftPayments = [];
-              _selectedShiftTotalRevenue = 0.0;
-            });
-          }
+          // Xử lý 404 và lỗi khác chung
+          setStateIfMounted(() {
+            _shiftPayments = [];
+            _selectedShiftTotalRevenue = 0.0;
+            _paymentError = response.statusCode == 404
+                ? null
+                : 'Lỗi tải phiếu (${response.statusCode})';
+            _isLoadingShiftPayments = false;
+          });
           print(
-              "Error fetching payments for shift $shiftId: ${response.statusCode}");
+              "Error or Not Found fetching payments (${response.statusCode}) for shift $shiftId.");
         }
       } else {
         print(
@@ -704,7 +880,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     } catch (e) {
       print("Exception fetching payments for shift $shiftId: $e");
       if (mounted && _selectedShiftId == shiftId) {
-        setState(() {
+        setStateIfMounted(() {
           _paymentError = 'Lỗi kết nối hoặc xử lý dữ liệu phiếu.';
           _isLoadingShiftPayments = false;
           _shiftPayments = [];
@@ -714,103 +890,261 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
   }
 
-  Future<void> _fetchHistoricalBills(DateTime date) async {
+  Future<void> _fetchShiftCustomerSummary(int shiftId) async {
     if (!mounted) return;
-    setState(() {
-      _isLoadingHistory = true;
-      _historicalBills = [];
-      _historyError = null;
-    });
-    print("Fetching historical bills for: ${_dateFormatter.format(date)}");
+
+    if (_selectedShiftId == shiftId && !_isLoadingCustomerSummary) {
+      setStateIfMounted(() => _isLoadingCustomerSummary = true);
+    } else if (_selectedShiftId != shiftId) {
+      print(
+          "Fetch summary for shift $shiftId aborted, selection changed to $_selectedShiftId");
+      return;
+    }
+
+    final url =
+        Uri.parse('$BASE_API_URL/payment/shift/$shiftId/total-customers');
+    print("Fetching customer summary for shift: $shiftId from $url");
 
     try {
-      await Future.delayed(
-          Duration(milliseconds: 300 + math.Random().nextInt(400)));
-      _generateDummyData(forDate: date);
-      if (mounted) {
-        setState(() {
-          _isLoadingHistory = false;
-        });
-      }
-    } catch (e) {
-      print("Error during historical bill fetch/generation: $e");
-      if (mounted) {
-        setState(() {
-          _historyError = 'Lỗi tạo/tải dữ liệu lịch sử.';
-          _isLoadingHistory = false;
-          _historicalBills = [];
-        });
-      }
-    }
-  }
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
 
-  void _generateDummyData({DateTime? forDate}) {
-    if (forDate == null) return;
-    print(
-        "Generating dummy historical bills for ${_dateFormatter.format(forDate)}.");
-    try {
-      final random = math.Random();
-      final int numberOfBills = random.nextInt(15) + 5;
-      final List<Map<String, dynamic>> dummyMapList =
-          List.generate(numberOfBills, (index) {
-        final baseTime = forDate.add(Duration(
-            hours: random.nextInt(20) + 2,
-            minutes: random.nextInt(60),
-            seconds: random.nextInt(60)));
-        final paymentTime = baseTime;
-        final creationTime = baseTime.subtract(
-            Duration(minutes: random.nextInt(5), seconds: random.nextInt(30)));
-        return {
-          'payment_id': 1000 + index + forDate.day * 100 + forDate.month * 10,
-          'table_session_id': 500 + index + forDate.day * 10,
-          'table_number': random.nextInt(20) + 1,
-          'payment_time': paymentTime.toIso8601String() + 'Z',
-          'created_time': creationTime.toIso8601String() + 'Z',
-          'amount': (random.nextDouble() * 600 + 50) * 1000,
-          'payment_method': random.nextBool() ? 'Tiền mặt' : 'Chuyển khoản',
-        };
-      });
-
-      if (mounted) {
-        setState(() {
-          _historicalBills =
-              dummyMapList.map((map) => Payment.fromJson(map)).toList();
-          _historicalBills
-              .sort((a, b) => b.paymentTime.compareTo(a.paymentTime));
-          _historyError = null;
-        });
-        print("Generated ${_historicalBills.length} dummy historical bills.");
-      }
-    } catch (e) {
-      print("Error inside _generateDummyData: $e");
-      if (mounted) {
-        setState(() {
-          _historyError = 'Lỗi tạo dữ liệu giả.';
-          _historicalBills = [];
-        });
-      }
-    }
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-        context: context,
-        initialDate: _selectedDate ?? DateTime.now(),
-        firstDate: DateTime(2020),
-        lastDate: DateTime.now(),
-        locale: const Locale('vi', 'VN'));
-
-    if (picked != null && picked != _selectedDate) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {
-            _selectedDate = picked;
-            _isLoadingHistory = true;
-            _historicalBills = [];
-            _historyError = null;
+      if (_selectedShiftId == shiftId) {
+        if (response.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
+          final summary = ShiftCustomerSummary.fromJson(data);
+          setStateIfMounted(() {
+            _selectedShiftTotalCustomers = summary.totalCustomers;
+            _selectedShiftTotalSessions = summary.totalSessions;
+            _isLoadingCustomerSummary = false;
           });
+          print(
+              "Fetched customer summary for shift $shiftId: Customers=${summary.totalCustomers}, Sessions=${summary.totalSessions}");
+        } else {
+          setStateIfMounted(() {
+            _selectedShiftTotalCustomers = 0;
+            _selectedShiftTotalSessions = 0;
+            _isLoadingCustomerSummary = false;
+          });
+          print(
+              "Error or Not Found fetching customer summary (${response.statusCode}) for shift $shiftId");
         }
-        _fetchHistoricalBills(picked);
+      } else {
+        print(
+            "Ignoring stale customer summary data for shift $shiftId, current selection is $_selectedShiftId");
+      }
+    } catch (e) {
+      print("Exception fetching customer summary for shift $shiftId: $e");
+      if (mounted && _selectedShiftId == shiftId) {
+        setStateIfMounted(() {
+          _selectedShiftTotalCustomers = 0;
+          _selectedShiftTotalSessions = 0;
+          _isLoadingCustomerSummary = false;
+        });
+      }
+    }
+  }
+
+  Future<PaymentDetail> _fetchPaymentDetails(int paymentId) async {
+    final url = Uri.parse('$BASE_API_URL/payment/$paymentId/detail');
+    print("Fetching payment details for ID: $paymentId from $url");
+
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      if (!mounted) throw Exception("Component unmounted during fetch");
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        print("Payment details fetched: $data");
+        return PaymentDetail.fromJson(data);
+      } else if (response.statusCode == 404) {
+        print("Payment details not found (404) for ID: $paymentId");
+        throw Exception('Không tìm thấy chi tiết (404)');
+      } else {
+        print(
+            "Error fetching payment details (${response.statusCode}) for ID: $paymentId");
+        throw Exception('Lỗi tải chi tiết (${response.statusCode})');
+      }
+    } catch (e) {
+      print("Exception fetching payment details for ID $paymentId: $e");
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Lỗi kết nối');
+    }
+  }
+
+  Future<void> _showPaymentDetailsDialog(
+      BuildContext context, PaymentDetail details) async {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
+    Widget buildDetailTile(IconData icon, String label, String value) {
+      return ListTile(
+        leading: Icon(icon,
+            size: 20,
+            color: theme.listTileTheme.iconColor ?? Colors.blueGrey.shade400),
+        title: Text(label,
+            style:
+                textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: Text(value,
+            style: textTheme.bodyMedium?.copyWith(
+                color: textTheme.bodyMedium?.color?.withOpacity(0.9))),
+        dense: true,
+        contentPadding: EdgeInsets.symmetric(vertical: 2, horizontal: 0),
+      );
+    }
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Chi tiết Hóa đơn #${details.paymentId}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              buildDetailTile(Icons.table_restaurant_outlined, 'Số bàn',
+                  details.tableNumber?.toString() ?? 'N/A'),
+              Divider(height: 10, thickness: 0.5),
+              buildDetailTile(
+                  Icons.access_time_filled_rounded,
+                  'Giờ bắt đầu',
+                  details.startTime != null
+                      ? _dateTimeDetailFormatter.format(details.startTime!)
+                      : 'N/A'),
+              buildDetailTile(
+                  Icons.access_time_rounded,
+                  'Giờ kết thúc',
+                  details.endTime != null
+                      ? _dateTimeDetailFormatter.format(details.endTime!)
+                      : 'N/A'),
+              Divider(height: 10, thickness: 0.5),
+              buildDetailTile(Icons.people_alt_outlined, 'Số khách',
+                  details.numberOfCustomers?.toString() ?? 'N/A'),
+              buildDetailTile(Icons.restaurant_menu_rounded, 'Gói buffet',
+                  details.buffetPackage),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Đóng'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+          ],
+          contentPadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 10.0),
+          titlePadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 10.0),
+          actionsPadding:
+              const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          shape: theme.dialogTheme.shape,
+        );
+      },
+    );
+  }
+
+  // **CẬP NHẬT _fetchHistoricalBills thành _fetchPaymentHistory VÀ DÙNG API MỚI**
+  Future<void> _fetchPaymentHistory(DateTime selectedDate) async {
+    if (!mounted) return;
+    setStateIfMounted(() {
+      _isLoadingHistory = true;
+      _historicalBills = []; // Clear list cũ
+      _historyError = null;
+      _historyTotalRevenue = 0.0; // Reset total revenue
+    });
+
+    final year = selectedDate.year;
+    final month = selectedDate.month;
+    final day = selectedDate.day;
+
+    final Map<String, String> queryParams = {
+      'year': year.toString(),
+      'month': month.toString(),
+      'day': day.toString(),
+    };
+
+    final url = Uri.parse('$BASE_API_URL/payment/history/')
+        .replace(queryParameters: queryParams);
+    print("Fetching payment history from: $url");
+
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final historyResponse = PaymentHistoryResponse.fromJson(data);
+        historyResponse.payments
+            .sort((a, b) => b.paymentTime.compareTo(a.paymentTime));
+
+        setStateIfMounted(() {
+          _historicalBills = historyResponse.payments;
+          _historyTotalRevenue = historyResponse.totalRevenue;
+          _historyError = null;
+          _isLoadingHistory = false;
+        });
+        print(
+            "Fetched ${historyResponse.payments.length} historical payments. Total Revenue: ${historyResponse.totalRevenue}");
+      } else if (response.statusCode == 404) {
+        setStateIfMounted(() {
+          _historicalBills = [];
+          _historyTotalRevenue = 0.0;
+          _historyError = null;
+          _isLoadingHistory = false;
+        });
+        print("No payment history found for the selected date (404).");
+      } else {
+        setStateIfMounted(() {
+          _historicalBills = [];
+          _historyTotalRevenue = 0.0;
+          _historyError = 'Lỗi tải lịch sử (${response.statusCode})';
+          _isLoadingHistory = false;
+        });
+        print("Error fetching payment history (${response.statusCode}).");
+      }
+    } catch (e) {
+      print("Exception fetching payment history: $e");
+      setStateIfMounted(() {
+        _historicalBills = [];
+        _historyTotalRevenue = 0.0;
+        _historyError = 'Lỗi kết nối hoặc xử lý lịch sử.';
+        _isLoadingHistory = false;
+      });
+    }
+  }
+
+  // **Bỏ hàm _generateDummyData**
+  // void _generateDummyData({DateTime? forDate}) { ... }
+
+  // **CẬP NHẬT _selectDateForHistory để gọi hàm fetch mới**
+  Future<void> _selectDateForHistory(BuildContext context,
+      {bool isInitialLoad = false}) async {
+    DateTime initial = _selectedDateForHistory ?? DateTime.now();
+    DateTime first = DateTime(2020);
+    DateTime last = DateTime.now();
+
+    DateTime? picked = initial;
+
+    if (!isInitialLoad) {
+      picked = await showDatePicker(
+          context: context,
+          initialDate: initial,
+          firstDate: first,
+          lastDate: last,
+          locale: const Locale('vi', 'VN'));
+    }
+
+    if (picked != null &&
+        (picked != _selectedDateForHistory || isInitialLoad)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setStateIfMounted(() {
+          _selectedDateForHistory = picked;
+          _isLoadingHistory = true;
+          _historicalBills = [];
+          _historyError = null;
+          _historyTotalRevenue = 0.0;
+        });
+        _fetchPaymentHistory(picked!); // Gọi hàm fetch API thật
       });
     }
   }
@@ -823,7 +1157,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     return Scaffold(
       appBar: AppBar(
-          // **THÊM LẠI LEADING ĐỂ MỞ DRAWER**
           leading: Builder(
             builder: (context) => IconButton(
               icon: Icon(Icons.menu_rounded, color: theme.iconTheme.color),
@@ -905,20 +1238,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
             onTap: () {
               if (_currentViewIndex != 1) {
                 setState(() => _currentViewIndex = 1);
-                if (_selectedDate == null) {
-                  final today = DateTime.now();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() {
-                        _selectedDate = today;
-                        _isLoadingHistory = true;
-                        _historicalBills = [];
-                        _historyError = null;
-                      });
-                    }
-                    _fetchHistoricalBills(today);
-                  });
-                }
+                // Không cần fetch ở đây nữa vì đã fetch trong initState hoặc khi chọn ngày
               }
               Navigator.pop(context);
             }),
@@ -977,7 +1297,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // --- Table Header ---
-                // **THÊM LABEL 'PT THANH TOÁN'**
                 _buildTableRow(
                   theme: theme,
                   height: _tableHeaderHeight,
@@ -987,7 +1306,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     Text('MÃ HĐ'), // 0
                     Text('TRẠNG THÁI'), // 1
                     Text('TG THANH TOÁN'), // 2
-                    Text('PT THANH TOÁN'), // 3 **(Mới)**
+                    Text('PT THANH TOÁN'), // 3
                     Text('TỔNG TIỀN'), // 4
                     Text('CHI TIẾT'), // 5
                   ],
@@ -1000,8 +1319,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   child: RefreshIndicator(
                     onRefresh: () async {
                       if (_selectedShiftId != null &&
-                          !_isLoadingShiftPayments) {
-                        await _fetchPaymentsForShift(_selectedShiftId!);
+                          !_isLoadingShiftPayments &&
+                          !_isLoadingCustomerSummary) {
+                        await Future.wait([
+                          _fetchPaymentsForShift(_selectedShiftId!),
+                          _fetchShiftCustomerSummary(_selectedShiftId!),
+                        ]);
                       }
                     },
                     color: theme.colorScheme.secondary,
@@ -1016,7 +1339,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       height: dividerThickness,
                       thickness: dividerThickness,
                       color: dividerColor),
-                  // **THÊM LABEL 'PT THANH TOÁN'**
                   _buildTableRow(
                     theme: theme,
                     height: _tableHeaderHeight,
@@ -1026,7 +1348,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       Text('MÃ HĐ'), // 0
                       Text('TRẠNG THÁI'), // 1
                       Text('TG THANH TOÁN'), // 2
-                      Text('PT THANH TOÁN'), // 3 **(Mới)**
+                      Text('PT THANH TOÁN'), // 3
                       Text('TỔNG TIỀN'), // 4
                       Text('CHI TIẾT'), // 5
                     ],
@@ -1047,7 +1369,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
     final Color oddRowColor = Colors.grey.shade200;
 
     // --- Handle Loading, Error, Empty States ---
-    if (_isLoadingShiftPayments && _selectedShiftId != null) {
+    if ((_isLoadingShiftPayments || _isLoadingCustomerSummary) &&
+        _selectedShiftId != null) {
       if (_shiftPayments.isEmpty) {
         return Center(
             child:
@@ -1078,6 +1401,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
               Text("Vui lòng chọn một ca.", style: theme.textTheme.bodyMedium));
     }
     if (!_isLoadingShiftPayments &&
+        !_isLoadingCustomerSummary &&
         _shiftPayments.isEmpty &&
         _paymentError == null &&
         _selectedShiftId != null) {
@@ -1096,12 +1420,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
         ),
       );
     }
-    if (_isLoadingShiftPayments && _shiftPayments.isEmpty) {
-      return const SizedBox.shrink();
-    }
 
     // --- Display Data Rows ---
-    // **SỬA LỖI: THÊM RETURN WIDGET CUỐI CÙNG**
     if (_shiftPayments.isNotEmpty && _paymentError == null) {
       return ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -1113,7 +1433,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
         itemBuilder: (context, index) {
           final payment = _shiftPayments[index];
           final statusText = "Hoàn thành";
-          // **THÊM DATA 'PT THANH TOÁN' VÀO LIST CELLS**
+          final bool isLoadingDetails =
+              _fetchingDetailsForPaymentIds.contains(payment.paymentId);
+
           return _buildTableRow(
             theme: theme,
             height: _tableRowHeight,
@@ -1129,14 +1451,68 @@ class _ManagementScreenState extends State<ManagementScreen> {
               // 2: TG THANH TOÁN
               Text(_fullDateTimeFormatter.format(payment.paymentTime),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
-              // 3: PT THANH TOÁN **(Mới)**
+              // 3: PT THANH TOÁN
               Text(payment.paymentMethod,
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               // 4: TỔNG TIỀN
               Text(_currencyFormatter.format(payment.amount)),
-              // 5: CHI TIẾT
+              // 5: CHI TIẾT - **CẬP NHẬT onPressed VÀ CHILD**
               OutlinedButton(
-                onPressed: () {/* Handle view details */},
+                onPressed: isLoadingDetails
+                    ? null
+                    : () async {
+                        if (!mounted) return;
+                        setStateIfMounted(() => _fetchingDetailsForPaymentIds
+                            .add(payment.paymentId));
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: theme.colorScheme.onPrimary)),
+                                SizedBox(width: 15),
+                                Text('Đang tải chi tiết...',
+                                    style: TextStyle(
+                                        color: theme.colorScheme.onPrimary)),
+                              ],
+                            ),
+                            duration: Duration(seconds: 30),
+                            backgroundColor:
+                                theme.colorScheme.secondary.withOpacity(0.9),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                        );
+
+                        try {
+                          final details =
+                              await _fetchPaymentDetails(payment.paymentId);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          _showPaymentDetailsDialog(context, details);
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Lỗi: ${e.toString()}'),
+                              backgroundColor: theme.colorScheme.error,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                          );
+                        } finally {
+                          setStateIfMounted(() => _fetchingDetailsForPaymentIds
+                              .remove(payment.paymentId));
+                        }
+                      },
                 style: theme.outlinedButtonTheme.style?.copyWith(
                     padding: MaterialStateProperty.all(
                         EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
@@ -1144,16 +1520,20 @@ class _ManagementScreenState extends State<ManagementScreen> {
                         .textTheme.labelSmall
                         ?.copyWith(fontWeight: FontWeight.w500, fontSize: 11)),
                     minimumSize: MaterialStateProperty.all(Size(40, 26))),
-                child: const Text('Xem'),
+                child: isLoadingDetails
+                    ? SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: theme.colorScheme.primary))
+                    : const Text('Xem'),
               ),
             ],
           );
         },
       );
     }
-    // **THÊM RETURN CUỐI CÙNG ĐỂ FIX LỖI**
-    return const SizedBox
-        .shrink(); // Trả về widget trống nếu không có trường hợp nào khớp
+    return const SizedBox.shrink();
   }
 
   // --- Widget xây dựng View cho Lịch Sử ---
@@ -1173,19 +1553,18 @@ class _ManagementScreenState extends State<ManagementScreen> {
             children: [
               Expanded(
                 child: Text(
-                  _selectedDate == null
+                  _selectedDateForHistory == null
                       ? 'Chọn ngày xem lịch sử:'
-                      : _isLoadingHistory
-                          ? 'Đang tải lịch sử ngày: ${_dateFormatter.format(_selectedDate!)}...'
-                          : 'Lịch sử ngày: ${_dateFormatter.format(_selectedDate!)} (${_historicalBills.length} phiếu)',
+                      : 'Lịch sử ngày: ${_dateFormatter.format(_selectedDateForHistory!)} (${_isLoadingHistory ? "Đang tải..." : "${_historicalBills.length} phiếu - ${_currencyFormatter.format(_historyTotalRevenue)}"})',
                   style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               SizedBox(width: _tableCellHorizontalPadding * 2),
               ElevatedButton.icon(
-                onPressed:
-                    _isLoadingHistory ? null : () => _selectDate(context),
+                onPressed: _isLoadingHistory
+                    ? null
+                    : () => _selectDateForHistory(context),
                 icon: const Icon(Icons.calendar_today, size: 16),
                 label: const Text('Chọn Ngày'),
                 style: theme.elevatedButtonTheme.style?.copyWith(
@@ -1209,7 +1588,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // --- Table Header ---
-                // **THÊM LABEL 'PT THANH TOÁN'**
                 _buildTableRow(
                   theme: theme,
                   height: _tableHeaderHeight,
@@ -1219,7 +1597,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     Text('MÃ HĐ'), // 0
                     Text('TRẠNG THÁI'), // 1
                     Text('TG THANH TOÁN'), // 2
-                    Text('PT THANH TOÁN'), // 3 **(Mới)**
+                    Text('PT THANH TOÁN'), // 3
                     Text('TỔNG TIỀN'), // 4
                     Text('CHI TIẾT'), // 5
                   ],
@@ -1230,9 +1608,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     color: dividerColor),
                 Expanded(
                   child: RefreshIndicator(
-                    onRefresh: (_selectedDate == null || _isLoadingHistory)
+                    onRefresh: (_selectedDateForHistory == null ||
+                            _isLoadingHistory)
                         ? () async {}
-                        : () => _fetchHistoricalBills(_selectedDate!),
+                        : () => _fetchPaymentHistory(_selectedDateForHistory!),
                     color: theme.colorScheme.secondary,
                     backgroundColor: theme.cardTheme.color ?? Colors.white,
                     child: _buildHistoryBillsContent(theme),
@@ -1245,7 +1624,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       height: dividerThickness,
                       thickness: dividerThickness,
                       color: dividerColor),
-                  // **THÊM LABEL 'PT THANH TOÁN'**
                   _buildTableRow(
                     theme: theme,
                     height: _tableHeaderHeight,
@@ -1255,7 +1633,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       Text('MÃ HĐ'), // 0
                       Text('TRẠNG THÁI'), // 1
                       Text('TG THANH TOÁN'), // 2
-                      Text('PT THANH TOÁN'), // 3 **(Mới)**
+                      Text('PT THANH TOÁN'), // 3
                       Text('TỔNG TIỀN'), // 4
                       Text('CHI TIẾT'), // 5
                     ],
@@ -1269,40 +1647,18 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
-  // --- **CHỈNH SỬA _buildHistoryBillsContent** ---
+  // --- Helper to build content inside RefreshIndicator for History Bills ---
   Widget _buildHistoryBillsContent(ThemeData theme) {
     final dividerColor = theme.dividerTheme.color ?? Colors.grey.shade300;
     final dividerThickness = theme.dividerTheme.thickness ?? 1.0;
     final Color oddRowColor = Colors.grey.shade200;
 
     // --- Handle Loading, Error, Empty States ---
-    if (_isLoadingHistory &&
-        _historicalBills.isEmpty &&
-        _historyError == null) {
+    if (_isLoadingHistory && _historicalBills.isEmpty) {
       return Center(
           child: CircularProgressIndicator(color: theme.colorScheme.secondary));
     }
-    if (_selectedDate == null && !_isLoadingHistory) {
-      return LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.date_range_outlined,
-                      size: 40, color: theme.iconTheme.color?.withOpacity(0.4)),
-                  SizedBox(height: _tableCellHorizontalPadding * 2),
-                  Text('Vui lòng chọn ngày.', style: theme.textTheme.bodyMedium)
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    // Bỏ kiểm tra selectedDateForHistory == null vì mặc định đã load ngày hôm nay
     if (_historyError != null) {
       return Center(
         child: Padding(
@@ -1312,10 +1668,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 textAlign: TextAlign.center)),
       );
     }
+    // Hiển thị empty khi load xong, không lỗi, và list rỗng (ngày chắc chắn đã được chọn)
     if (!_isLoadingHistory &&
         _historyError == null &&
-        _historicalBills.isEmpty &&
-        _selectedDate != null) {
+        _historicalBills.isEmpty) {
       return LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           physics: AlwaysScrollableScrollPhysics(),
@@ -1333,7 +1689,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
 
     // --- Display Data Rows ---
-    // Chỉ hiển thị ListView nếu có dữ liệu và không gặp lỗi
     if (_historicalBills.isNotEmpty && _historyError == null) {
       return ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -1345,7 +1700,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
         itemBuilder: (context, index) {
           final payment = _historicalBills[index];
           final statusText = "Hoàn thành";
-          // **THÊM DATA 'PT THANH TOÁN' VÀO LIST CELLS**
+          final bool isLoadingDetails =
+              _fetchingDetailsForPaymentIds.contains(payment.paymentId);
+
           return _buildTableRow(
             theme: theme,
             height: _tableRowHeight,
@@ -1361,14 +1718,68 @@ class _ManagementScreenState extends State<ManagementScreen> {
               // 2: TG THANH TOÁN
               Text(_fullDateTimeFormatter.format(payment.paymentTime),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
-              // 3: PT THANH TOÁN **(Mới)**
+              // 3: PT THANH TOÁN
               Text(payment.paymentMethod,
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               // 4: TỔNG TIỀN
               Text(_currencyFormatter.format(payment.amount)),
               // 5: CHI TIẾT
               OutlinedButton(
-                onPressed: () {/* Handle view details */},
+                onPressed: isLoadingDetails
+                    ? null
+                    : () async {
+                        if (!mounted) return;
+                        setStateIfMounted(() => _fetchingDetailsForPaymentIds
+                            .add(payment.paymentId));
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: theme.colorScheme.onPrimary)),
+                                SizedBox(width: 15),
+                                Text('Đang tải chi tiết...',
+                                    style: TextStyle(
+                                        color: theme.colorScheme.onPrimary)),
+                              ],
+                            ),
+                            duration: Duration(seconds: 30),
+                            backgroundColor:
+                                theme.colorScheme.secondary.withOpacity(0.9),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                        );
+
+                        try {
+                          final details =
+                              await _fetchPaymentDetails(payment.paymentId);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          _showPaymentDetailsDialog(context, details);
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Lỗi: ${e.toString()}'),
+                              backgroundColor: theme.colorScheme.error,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                          );
+                        } finally {
+                          setStateIfMounted(() => _fetchingDetailsForPaymentIds
+                              .remove(payment.paymentId));
+                        }
+                      },
                 style: theme.outlinedButtonTheme.style?.copyWith(
                     padding: MaterialStateProperty.all(
                         EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
@@ -1376,16 +1787,20 @@ class _ManagementScreenState extends State<ManagementScreen> {
                         .textTheme.labelSmall
                         ?.copyWith(fontWeight: FontWeight.w500, fontSize: 11)),
                     minimumSize: MaterialStateProperty.all(Size(40, 26))),
-                child: const Text('Xem'),
+                child: isLoadingDetails
+                    ? SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: theme.colorScheme.primary))
+                    : const Text('Xem'),
               ),
             ],
           );
         },
       );
     }
-    // **THÊM RETURN CUỐI CÙNG ĐỂ FIX LỖI**
-    return const SizedBox
-        .shrink(); // Trả về widget trống nếu không có trường hợp nào khớp
+    return const SizedBox.shrink();
   }
 
   // --- Widget chọn ca ---
