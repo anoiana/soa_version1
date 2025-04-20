@@ -15,6 +15,7 @@ dependencies:
   google_fonts: ^6.1.0
   shimmer: ^3.0.0
   web_socket_channel: ^2.4.0
+  data_table_2: ^2.5.10
 
 dev_dependencies:
   flutter_test:
