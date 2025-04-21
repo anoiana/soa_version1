@@ -5,10 +5,10 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:collection/collection.dart'; // Import for firstWhereOrNull
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart'; // **IMPORT FOR CLIPBOARD**
 
-import 'openTable.dart'; // Để định dạng ngày và tiền tệ
+import 'openTable.dart'; // Để định dạng ngày và tiền tệ (Ensure this file exists and defines TableSelectionScreen)
 // import 'package:data_table_2/data_table_2.dart'; // REMOVED DataTable2 - Still removed
-import 'package:intl/intl.dart'; // Để định dạng ngày và tiền tệ
 import 'package:intl/date_symbol_data_local.dart'; // **IMPORT NÀY QUAN TRỌNG**
 
 // --- Constants ---
@@ -347,7 +347,8 @@ class MyApp extends StatelessWidget {
                     headingRowColor:
                         MaterialStateProperty.all(Colors.blue.shade100),
                     dataRowColor: MaterialStateProperty.resolveWith((states) {
-                      return Colors.white;
+                      // Consider alternating row colors if desired
+                      return Colors.white; // Example: Keep all white for now
                     }),
                     dividerThickness: 1,
                     horizontalMargin: 12,
@@ -478,7 +479,8 @@ class MyApp extends StatelessWidget {
                 ),
                 datePickerTheme: DatePickerThemeData(headerBackgroundColor: Colors.blueAccent.shade700, headerForegroundColor: Colors.white, backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: kCardElevation)),
             debugShowCheckedModeBanner: false,
-            home: ManagementScreen(role: 'Quản lý',), // Widget chính của bạn
+            // ***IMPORTANT: Provide a default role or get it from actual login/auth state***
+            home: ManagementScreen(role: 'Quản lý'), // Widget chính của bạn
           );
         }
       },
@@ -545,6 +547,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   final double _tableRowHeight = 50.0;
   final double _tableHeaderHeight = 40.0;
   final double _tableCellHorizontalPadding = 5.0;
+  final Color _oddRowColor = Colors.grey.shade100; // Define odd row color
 
   final List<int> _years = List<int>.generate(
       DateTime.now().year - 2019, (i) => DateTime.now().year - i);
@@ -555,14 +558,16 @@ class _ManagementScreenState extends State<ManagementScreen> {
     _selectedHistoryYear = DateTime.now().year;
     // **KHÔNG GỌI KHỞI TẠO LOCALE Ở ĐÂY NỮA**
     _fetchShifts();
-    _triggerHistoryFetch();
+    _triggerHistoryFetch(); // Fetch initial history (e.g., current year)
   }
 
   @override
   void dispose() {
+    // Clean up resources if necessary
     super.dispose();
   }
 
+  // Helper to safely call setState only if the widget is still mounted
   void setStateIfMounted(VoidCallback fn) {
     if (mounted) {
       setState(fn);
@@ -575,6 +580,14 @@ class _ManagementScreenState extends State<ManagementScreen> {
     final kDefaultPadding = 12.0;
     final bool isHistoryView = _currentViewIndex == 1;
 
+    // Determine loading state for display
+    bool isLoadingCurrent = isHistoryView
+        ? _isLoadingHistory
+        : (_isLoadingShiftPayments || _isLoadingCustomerSummary);
+    bool isLoadingPrevious = isHistoryView ? _isLoadingPrevHistory : false;
+    bool isLoading = isLoadingCurrent || isLoadingPrevious;
+
+    // Determine current values based on view
     String totalBills = isHistoryView
         ? (_isLoadingHistory ? '...' : _historyTotalBills.toString())
         : (_isLoadingShiftPayments && _shiftPayments.isEmpty
@@ -597,26 +610,26 @@ class _ManagementScreenState extends State<ManagementScreen> {
         : (_isLoadingCustomerSummary
             ? '...'
             : _selectedShiftTotalSessions.toString());
+
+    // Calculate and format comparison data only for history view
     String historyComparisonPeriodText = '';
     String historyRevenueChange = '';
     String historyBillsChange = '';
     String historyCustomersChange = '';
     String historySessionsChange = '';
 
-    if (isHistoryView &&
-        !_isLoadingHistory &&
-        !_isLoadingPrevHistory &&
-        _historyError == null) {
+    if (isHistoryView && !isLoading && _historyError == null) {
       final comparisonData = _getComparisonPeriodTextAndCalculateChanges();
       historyComparisonPeriodText = comparisonData['text'] ?? '';
       historyRevenueChange = comparisonData['revenueChange'] ?? '';
       historyBillsChange = comparisonData['billsChange'] ?? '';
       historyCustomersChange = comparisonData['customersChange'] ?? '';
       historySessionsChange = comparisonData['sessionsChange'] ?? '';
-    } else if (isHistoryView && (_isLoadingHistory || _isLoadingPrevHistory)) {
+    } else if (isHistoryView && isLoading) {
       historyComparisonPeriodText = 'Đang tải so sánh...';
     }
 
+    // Determine display text based on view
     final String displayComparisonText =
         isHistoryView ? historyComparisonPeriodText : 'Trong ca hiện tại';
     final String displayRevenueChange =
@@ -632,12 +645,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
     final String sessionsTitle =
         isHistoryView ? 'Tổng số phiên' : 'Tổng số phiên (Ca)';
 
+    // Layout the Grid
     return LayoutBuilder(builder: (context, constraints) {
       int crossAxisCount = 4;
       if (constraints.maxWidth < 1200) crossAxisCount = 4;
       if (constraints.maxWidth < 900) crossAxisCount = 2;
       if (constraints.maxWidth < 500) crossAxisCount = 1;
-      double childAspectRatio = isHistoryView ? 2.2 : 2.4;
+      double childAspectRatio = isHistoryView ? 2.2 : 2.4; // Adjusted ratios
       if (crossAxisCount == 2) childAspectRatio = isHistoryView ? 2.6 : 2.8;
       if (crossAxisCount == 1) childAspectRatio = isHistoryView ? 3.2 : 3.5;
       final double crossAxisSpacing = kDefaultPadding;
@@ -700,6 +714,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
       required Color changeColor,
       required String comparisonText}) {
     final textTheme = theme.textTheme;
+    final bool showComparison = comparisonText.isNotEmpty;
+    final bool showChange = change.isNotEmpty;
+
     return Card(
         child: Padding(
             padding: const EdgeInsets.all(12.0),
@@ -707,21 +724,26 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Top Row: Title and Icon
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title,
-                            style: textTheme.labelSmall?.copyWith(
-                                color: textTheme.labelSmall?.color
-                                    ?.withOpacity(0.9),
-                                fontWeight: FontWeight.w600)),
+                        Expanded(
+                          // Allow title to wrap if necessary
+                          child: Text(title,
+                              style: textTheme.labelSmall?.copyWith(
+                                  color: textTheme.labelSmall?.color
+                                      ?.withOpacity(0.9),
+                                  fontWeight: FontWeight.w600)),
+                        ),
                         Padding(
                           padding: const EdgeInsets.only(left: 4.0),
                           child: Icon(icon,
                               size: 18, color: iconColor.withOpacity(0.8)),
                         )
                       ]),
+                  // Bottom Section: Value, Change, Comparison Text
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -730,12 +752,22 @@ class _ManagementScreenState extends State<ManagementScreen> {
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
-                          Text(value,
+                          // Value (allow potential wrapping)
+                          Flexible(
+                            child: Text(
+                              value,
                               style: textTheme.titleLarge?.copyWith(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
-                                  color: textTheme.titleLarge?.color)),
-                          if (change.isNotEmpty)
+                                  color: textTheme.titleLarge?.color),
+                              overflow:
+                                  TextOverflow.ellipsis, // Prevent overflow
+                              maxLines: 1,
+                            ),
+                          ),
+                          SizedBox(width: 4), // Space between value and change
+                          // Change Indicator (if available)
+                          if (showChange)
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -754,11 +786,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
                                         fontSize: 11.5)),
                               ],
                             ),
-                          if (change.isEmpty && comparisonText.isNotEmpty)
+                          // Placeholder if no change but comparison exists (for alignment)
+                          if (!showChange && showComparison)
                             const SizedBox(height: 15),
                         ],
                       ),
-                      if (comparisonText.isNotEmpty)
+                      // Comparison Text (aligned right, optional)
+                      if (showComparison)
                         Align(
                           alignment: Alignment.centerRight,
                           child: Padding(
@@ -768,13 +802,15 @@ class _ManagementScreenState extends State<ManagementScreen> {
                               style: textTheme.bodySmall,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
+                              textAlign: TextAlign.right,
                             ),
                           ),
                         ),
-                      if (comparisonText.isEmpty)
+                      // Placeholder if no comparison text (for consistent height)
+                      if (!showComparison)
                         SizedBox(
-                            height:
-                                textTheme.bodySmall?.fontSize ?? 10.5 + 2.0),
+                            height: (textTheme.bodySmall?.fontSize ?? 10.5) +
+                                2.0), // Match height of comparison text line
                     ],
                   ),
                 ])));
@@ -786,22 +822,29 @@ class _ManagementScreenState extends State<ManagementScreen> {
     } else if (change.startsWith('-') || change.startsWith('↓')) {
       return Colors.red.shade700;
     }
-    return Colors.grey.shade600;
+    return Colors.grey.shade600; // Neutral color if no change or '0%'
   }
 
   String _calculatePercentChange(num currentValue, num previousValue) {
     if (previousValue == 0) {
-      if (currentValue > 0) return '↑ Mới';
-      return '';
+      if (currentValue > 0) return '↑ Mới'; // New value added
+      if (currentValue == 0) return '0%'; // Was 0, is 0
+      return ''; // Should not happen if previous was 0 and current < 0
     }
     if (currentValue == previousValue) {
-      return '0%';
+      return '0%'; // No change
     }
     double change = (currentValue.toDouble() - previousValue.toDouble()) /
-        previousValue.abs();
-    String prefix = change > 0 ? '+' : '';
-    NumberFormat formatter = NumberFormat("##0.#%", "vi_VN");
-    return prefix + formatter.format(change); // Return with sign
+        previousValue.abs(); // Use absolute for percentage base
+    String prefix = change > 0 ? '+' : ''; // Add '+' sign for positive change
+    // Handle very small changes that might round to 0%
+    if (change.abs() < 0.0001 && change != 0) {
+      return change > 0 ? '+~0%' : '-~0%';
+    }
+    NumberFormat formatter =
+        NumberFormat("##0.#%", "vi_VN"); // Format as percentage
+    return prefix +
+        formatter.format(change); // Return with sign and formatted percentage
   }
 
   Map<String, String> _getComparisonPeriodTextAndCalculateChanges() {
@@ -811,44 +854,56 @@ class _ManagementScreenState extends State<ManagementScreen> {
     int? prevDay = _selectedHistoryDay;
     bool canCompare = false;
     DateTime? previousPeriodDate;
+    DateTime? currentPeriodDate; // To display the *current* period in text
 
+    // Determine the current and previous periods for comparison
     if (prevDay != null && prevMonth != null && prevYear != null) {
       try {
-        final current = DateTime(prevYear, prevMonth, prevDay);
-        previousPeriodDate = current.subtract(const Duration(days: 1));
+        currentPeriodDate = DateTime(prevYear, prevMonth, prevDay);
+        previousPeriodDate =
+            currentPeriodDate.subtract(const Duration(days: 1));
         text = 'so với ${_dateFormatter.format(previousPeriodDate)}';
         canCompare = true;
       } catch (e) {
-        prevYear = null;
+        // Handle invalid date combinations if necessary
+        print("Error creating date for comparison (day): $e");
+        prevYear = null; // Invalidate comparison
       }
     } else if (prevMonth != null && prevYear != null) {
       try {
-        final current = DateTime(prevYear, prevMonth);
-        previousPeriodDate = DateTime(current.year, current.month - 1);
+        currentPeriodDate = DateTime(prevYear, prevMonth);
+        // Calculate previous month correctly, handling year change
+        previousPeriodDate =
+            DateTime(currentPeriodDate.year, currentPeriodDate.month - 1);
         text =
-            'so với T${_monthYearFormatter.format(previousPeriodDate).split('/')[0]}';
+            'so với T${_monthYearFormatter.format(previousPeriodDate).split('/')[0]}'; // Just show 'T<month>'
         canCompare = true;
       } catch (e) {
-        prevYear = null;
+        print("Error creating date for comparison (month): $e");
+        prevYear = null; // Invalidate comparison
       }
     } else if (prevYear != null) {
       try {
+        currentPeriodDate = DateTime(prevYear);
         previousPeriodDate = DateTime(prevYear - 1);
         text = 'so với ${_yearFormatter.format(previousPeriodDate)}';
         canCompare = true;
       } catch (e) {
-        prevYear = null;
+        print("Error creating date for comparison (year): $e");
+        prevYear = null; // Invalidate comparison
       }
     } else {
-      text = '';
+      text = ''; // No comparison possible if year is not selected
       canCompare = false;
     }
 
+    // Initialize change strings
     String revenueChange = '';
     String billsChange = '';
     String customersChange = '';
     String sessionsChange = '';
 
+    // Calculate percentage changes if comparison is possible and previous data is loaded
     if (canCompare && !_isLoadingPrevHistory) {
       revenueChange = _calculatePercentChange(
           _historyTotalRevenue, _prevHistoryTotalRevenue);
@@ -858,6 +913,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
           _historyTotalCustomers, _prevHistoryTotalCustomers);
       sessionsChange = _calculatePercentChange(
           _historyTotalSessions, _prevHistoryTotalSessions);
+    } else if (canCompare && _isLoadingPrevHistory) {
+      // Indicate that comparison data is still loading
+      revenueChange = '...';
+      billsChange = '...';
+      customersChange = '...';
+      sessionsChange = '...';
     }
 
     return {
@@ -869,7 +930,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     };
   }
 
-  // --- _buildTableRow (Sử dụng Spacer) ---
+  // --- _buildTableRow (Sử dụng Spacer and fixed/flex widths) ---
   Widget _buildTableRow({
     required List<Widget> cells,
     required ThemeData theme,
@@ -883,8 +944,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
     final cellPadding = EdgeInsets.symmetric(
         horizontal: _tableCellHorizontalPadding, vertical: 4.0);
 
-    Widget buildCellWrapper(Widget content, Alignment alignment) {
-      return Padding(
+    // Helper to wrap cell content with padding and alignment
+    Widget buildCellWrapper(Widget content, Alignment alignment,
+        {double? width, int? flex}) {
+      final wrapper = Padding(
         padding: cellPadding,
         child: Align(
           alignment: alignment,
@@ -894,44 +957,39 @@ class _ManagementScreenState extends State<ManagementScreen> {
           ),
         ),
       );
+      if (width != null) {
+        return SizedBox(width: width, child: wrapper);
+      } else if (flex != null) {
+        return Expanded(flex: flex, child: wrapper);
+      } else {
+        return Expanded(child: wrapper); // Default flex if none provided
+      }
     }
 
     return Container(
       height: height,
       color: backgroundColor,
-      padding: EdgeInsets.symmetric(horizontal: _tableCellHorizontalPadding),
+      padding: EdgeInsets.symmetric(
+          horizontal: _tableCellHorizontalPadding / 2), // Slight outer padding
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment:
+            CrossAxisAlignment.stretch, // Ensure cells fill height
         children: [
-          SizedBox(
-            width: _colWidthId,
-            child: buildCellWrapper(cells[0], Alignment.centerLeft),
-          ),
-          const Spacer(),
-          SizedBox(
-            width: _colWidthStatus,
-            child: buildCellWrapper(cells[1], Alignment.center),
-          ),
-          const Spacer(),
-          Expanded(
-            flex: _colFlexPaymentTime,
-            child: buildCellWrapper(cells[2], Alignment.centerLeft),
-          ),
-          const Spacer(),
-          Expanded(
-            flex: _colFlexPaymentMethod,
-            child: buildCellWrapper(cells[3], Alignment.centerLeft),
-          ),
-          const Spacer(),
-          Expanded(
-            flex: _colFlexAmount,
-            child: buildCellWrapper(cells[4], Alignment.centerLeft),
-          ),
-          const Spacer(),
-          SizedBox(
-            width: _colWidthDetails,
-            child: buildCellWrapper(cells[5], Alignment.center),
-          ),
+          // Column 0: ID (Fixed Width)
+          buildCellWrapper(cells[0], Alignment.centerLeft, width: _colWidthId),
+          // Column 1: Status (Fixed Width)
+          buildCellWrapper(cells[1], Alignment.center, width: _colWidthStatus),
+          // Column 2: Payment Time (Flex Width)
+          buildCellWrapper(cells[2], Alignment.centerLeft,
+              flex: _colFlexPaymentTime),
+          // Column 3: Payment Method (Flex Width)
+          buildCellWrapper(cells[3], Alignment.centerLeft,
+              flex: _colFlexPaymentMethod),
+          // Column 4: Amount (Flex Width)
+          buildCellWrapper(cells[4], Alignment.centerRight,
+              flex: _colFlexAmount), // Align amount right
+          // Column 5: Details Button (Fixed Width)
+          buildCellWrapper(cells[5], Alignment.center, width: _colWidthDetails),
         ],
       ),
     );
@@ -941,29 +999,54 @@ class _ManagementScreenState extends State<ManagementScreen> {
     Color backgroundColor;
     Color textColor;
     IconData? iconData;
-    switch (statusText.toLowerCase()) {
+    String displayStatus = statusText;
+
+    // Normalize status text for easier comparison
+    String lowerCaseStatus = statusText.toLowerCase();
+
+    switch (lowerCaseStatus) {
       case 'hoàn thành':
+      case 'completed':
         backgroundColor = Colors.green.shade100;
         textColor = Colors.green.shade800;
         iconData = Icons.check_circle_outline_rounded;
+        displayStatus = "Hoàn thành"; // Standardize display text
         break;
-      default:
+      case 'pending':
+      case 'đang chờ':
+        backgroundColor = Colors.orange.shade100;
+        textColor = Colors.orange.shade800;
+        iconData = Icons.hourglass_empty_rounded;
+        displayStatus = "Đang chờ";
+        break;
+      case 'cancelled':
+      case 'đã hủy':
+        backgroundColor = Colors.red.shade100;
+        textColor = Colors.red.shade800;
+        iconData = Icons.cancel_outlined;
+        displayStatus = "Đã hủy";
+        break;
+      default: // Unknown or other statuses
         backgroundColor = Colors.grey.shade200;
         textColor = Colors.grey.shade800;
         iconData = Icons.help_outline_rounded;
+      // Keep original text if unknown
     }
+
     return Chip(
         avatar: iconData != null
             ? Icon(iconData, size: 14, color: textColor)
             : null,
-        label: Text(statusText, overflow: TextOverflow.ellipsis),
+        label: Text(displayStatus, overflow: TextOverflow.ellipsis),
         labelStyle: theme.chipTheme.labelStyle
             ?.copyWith(color: textColor, fontSize: 11.5),
         backgroundColor: backgroundColor,
-        padding: theme.chipTheme.padding,
-        shape: theme.chipTheme.shape,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact);
+        padding: theme.chipTheme.padding, // Use theme padding
+        shape: theme.chipTheme.shape, // Use theme shape
+        materialTapTargetSize:
+            MaterialTapTargetSize.shrinkWrap, // Reduce tap area
+        visualDensity: VisualDensity.compact // Make chip smaller
+        );
   }
 
   // --- Fetch Functions ---
@@ -980,18 +1063,20 @@ class _ManagementScreenState extends State<ManagementScreen> {
       _selectedShiftTotalCustomers = 0;
       _selectedShiftTotalSessions = 0;
       _isLoadingCustomerSummary = false;
+      _isLoadingShiftPayments = false; // Reset payment loading state too
     });
     print("Fetching shifts...");
     final url = Uri.parse('$BASE_API_URL/shifts/');
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (!mounted) return;
+      if (!mounted) return; // Check after await
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         final List<Shift> fetchedShifts = data
             .map((s) => Shift.fromJson(s))
-            .where((s) => s.startTime.year > 1970)
+            .where((s) => s.startTime.year > 1970) // Basic validation
             .toList();
+        // Sort shifts by start time, earliest first
         fetchedShifts.sort((a, b) => a.startTime.compareTo(b.startTime));
 
         setStateIfMounted(() {
@@ -999,52 +1084,76 @@ class _ManagementScreenState extends State<ManagementScreen> {
           _isLoadingShifts = false;
           _shiftError = null;
         });
-        _autoSelectCurrentOrLatestShift();
+        _autoSelectCurrentOrLatestShift(); // Select a shift after fetching
 
         print("Fetched ${_shifts.length} valid shifts.");
       } else {
+        print("Error fetching shifts: ${response.statusCode}");
         setStateIfMounted(() {
           _shiftError = 'Lỗi tải ca (${response.statusCode})';
           _isLoadingShifts = false;
         });
-        print("Error fetching shifts: ${response.statusCode}");
       }
     } catch (e) {
       print("Exception fetching shifts: $e");
-      setStateIfMounted(() {
-        _shiftError = 'Lỗi kết nối hoặc xử lý dữ liệu ca.';
-        _isLoadingShifts = false;
-      });
+      if (mounted) {
+        // Check mounted before setting state in catch block
+        setStateIfMounted(() {
+          _shiftError = 'Lỗi kết nối hoặc xử lý dữ liệu ca.';
+          _isLoadingShifts = false;
+        });
+      }
     }
   }
 
   void _autoSelectCurrentOrLatestShift() {
     if (_shifts.isEmpty) {
       print("No shifts available to auto-select.");
+      // Ensure loading indicator stops if fetch completed with no shifts
       if (_isLoadingShifts) setStateIfMounted(() => _isLoadingShifts = false);
       return;
     }
+
     final now = DateTime.now();
+    // Find a shift where current time is between start and end time
     Shift? currentShift = _shifts.firstWhereOrNull((shift) =>
         !now.isBefore(shift.startTime) && now.isBefore(shift.endTime));
+
+    // If no current shift found, select the latest one (last in the sorted list)
     final shiftToSelect = currentShift ?? _shifts.last;
 
-    if (_selectedShiftId != shiftToSelect.shiftId ||
-        (_selectedShiftId == shiftToSelect.shiftId &&
-            ((_shiftPayments.isEmpty &&
-                    !_isLoadingShiftPayments &&
-                    _paymentError == null) ||
-                (!_isLoadingCustomerSummary &&
-                    _selectedShiftTotalSessions == 0)))) {
+    // Check if the shift needs to be selected or re-selected
+    // Re-select if:
+    // 1. The shift ID is different from the currently selected one.
+    // 2. The shift ID is the same, BUT either:
+    //    a. Payment data is missing (empty list, not loading, no error).
+    //    b. Customer summary is missing (0 sessions, not loading).
+    bool needsSelection = _selectedShiftId != shiftToSelect.shiftId;
+    bool needsDataRefresh = _selectedShiftId == shiftToSelect.shiftId &&
+        ((_shiftPayments.isEmpty &&
+                !_isLoadingShiftPayments &&
+                _paymentError == null) ||
+            (!_isLoadingCustomerSummary &&
+                _selectedShiftTotalSessions == 0 &&
+                _selectedShiftTotalCustomers == 0)); // Check customers too
+
+    if (needsSelection || needsDataRefresh) {
       print("Auto-selecting or re-selecting shift: ${shiftToSelect.shiftId}");
       _selectShift(shiftToSelect.shiftId);
     } else {
       print(
           "Shift ${shiftToSelect.shiftId} already selected/current and has data or is loading.");
+      // Ensure loading indicators are turned off if fetch completed but no re-selection needed
+      if (_isLoadingShifts) setStateIfMounted(() => _isLoadingShifts = false);
+      if (_isLoadingShiftPayments)
+        setStateIfMounted(() => _isLoadingShiftPayments = false);
+      if (_isLoadingCustomerSummary)
+        setStateIfMounted(() => _isLoadingCustomerSummary = false);
     }
   }
 
   void _selectShift(int shiftId) {
+    // Prevent re-selecting the same shift if its data is already loading
     if (_selectedShiftId == shiftId &&
         (_isLoadingShiftPayments || _isLoadingCustomerSummary)) {
       print("Shift $shiftId is already loading data. Selection ignored.");
@@ -1052,94 +1161,136 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
 
     print("Shift selected: $shiftId");
+    // Use addPostFrameCallback to ensure the state update happens after the current build cycle
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Use setStateIfMounted for safety
       setStateIfMounted(() {
         _selectedShiftId = shiftId;
-        _isLoadingShiftPayments = true;
-        _isLoadingCustomerSummary = true;
-        _shiftPayments = [];
-        _selectedShiftTotalRevenue = 0.0;
-        _paymentError = null;
-        _selectedShiftTotalCustomers = 0;
-        _selectedShiftTotalSessions = 0;
-        _fetchingDetailsForPaymentIds.clear();
+        // Reset states for the new shift
+        _isLoadingShiftPayments = true; // Start loading payments
+        _isLoadingCustomerSummary = true; // Start loading customer summary
+        _shiftPayments = []; // Clear previous payments
+        _selectedShiftTotalRevenue = 0.0; // Reset revenue
+        _paymentError = null; // Clear previous errors
+        _selectedShiftTotalCustomers = 0; // Reset customer count
+        _selectedShiftTotalSessions = 0; // Reset session count
+        _fetchingDetailsForPaymentIds
+            .clear(); // Clear any pending detail fetches
       });
+      // Trigger the data fetching for the newly selected shift
       _fetchPaymentsForShift(shiftId);
       _fetchShiftCustomerSummary(shiftId);
     });
   }
 
   Future<void> _fetchPaymentsForShift(int shiftId) async {
-    if (!mounted) return;
+    if (!mounted) return; // Check if widget is still mounted
 
-    if (_selectedShiftId == shiftId && !_isLoadingShiftPayments) {
-      setStateIfMounted(() => _isLoadingShiftPayments = true);
-    } else if (_selectedShiftId != shiftId) {
+    // Double-check if the selected shift is still the one we are fetching for
+    if (_selectedShiftId != shiftId) {
       print(
           "Fetch payments for shift $shiftId aborted, selection changed to $_selectedShiftId");
+      // Ensure loading indicator is turned off if fetch is aborted due to selection change
+      if (mounted && _isLoadingShiftPayments) {
+        // Check mounted again before setState
+        setStateIfMounted(() => _isLoadingShiftPayments = false);
+      }
       return;
     }
+
+    // Ensure loading state is set (might already be true from _selectShift)
+    if (!_isLoadingShiftPayments) {
+      setStateIfMounted(() => _isLoadingShiftPayments = true);
+    }
+    _paymentError = null; // Clear previous error before fetching
 
     print("Fetching payments for shift: $shiftId");
     final url = Uri.parse('$BASE_API_URL/payment/shift/$shiftId');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 20));
-      if (!mounted) return;
+      if (!mounted) return; // Check mounted state after await
 
+      // Again, check if the selected shift is still the same after the network call
       if (_selectedShiftId == shiftId) {
         if (response.statusCode == 200) {
           final data = jsonDecode(utf8.decode(response.bodyBytes));
           final summary = ShiftPaymentSummary.fromJson(data);
+          // Sort payments by time, newest first
           summary.payments
               .sort((a, b) => b.paymentTime.compareTo(a.paymentTime));
 
           setStateIfMounted(() {
             _shiftPayments = summary.payments;
             _selectedShiftTotalRevenue = summary.totalRevenue;
-            _paymentError = null;
-            _isLoadingShiftPayments = false;
+            _paymentError = null; // Clear error on success
+            _isLoadingShiftPayments = false; // Loading finished
           });
           print(
-              "Fetched ${summary.payments.length} payments for shift $shiftId. Total: ${summary.totalRevenue}.");
-        } else {
+              "Fetched ${summary.payments.length} payments for shift $shiftId. Total Revenue: ${_currencyFormatter.format(summary.totalRevenue)}.");
+        } else if (response.statusCode == 404) {
+          // Handle 404 (Not Found) gracefully - likely means no payments for this shift yet
           setStateIfMounted(() {
             _shiftPayments = [];
             _selectedShiftTotalRevenue = 0.0;
-            _paymentError = response.statusCode == 404
-                ? null
-                : 'Lỗi tải phiếu (${response.statusCode})';
-            _isLoadingShiftPayments = false;
+            _paymentError = null; // No error, just no data
+            _isLoadingShiftPayments = false; // Loading finished
+          });
+          print("No payments found (404) for shift $shiftId.");
+        } else {
+          // Handle other non-200 status codes as errors
+          setStateIfMounted(() {
+            _shiftPayments = [];
+            _selectedShiftTotalRevenue = 0.0;
+            _paymentError = 'Lỗi tải phiếu (${response.statusCode})';
+            _isLoadingShiftPayments = false; // Loading finished (with error)
           });
           print(
-              "Error or Not Found fetching payments (${response.statusCode}) for shift $shiftId.");
+              "Error fetching payments (${response.statusCode}) for shift $shiftId.");
         }
       } else {
+        // Data is stale, selection changed during fetch
         print(
             "Ignoring stale payment data for shift $shiftId, current selection is $_selectedShiftId");
+        // Ensure loading indicator is turned off if fetch completed but data is stale
+        if (mounted && _isLoadingShiftPayments) {
+          // Check mounted again
+          setStateIfMounted(() => _isLoadingShiftPayments = false);
+        }
       }
     } catch (e) {
       print("Exception fetching payments for shift $shiftId: $e");
+      // Check mounted state and if the error is for the currently selected shift
       if (mounted && _selectedShiftId == shiftId) {
         setStateIfMounted(() {
           _paymentError = 'Lỗi kết nối hoặc xử lý dữ liệu phiếu.';
-          _isLoadingShiftPayments = false;
-          _shiftPayments = [];
+          _isLoadingShiftPayments = false; // Loading finished (with error)
+          _shiftPayments = []; // Clear data on error
           _selectedShiftTotalRevenue = 0.0;
         });
+      } else if (mounted && _isLoadingShiftPayments) {
+        // If error occurred but selection changed, still turn off loading indicator
+        setStateIfMounted(() => _isLoadingShiftPayments = false);
       }
     }
   }
 
   Future<void> _fetchShiftCustomerSummary(int shiftId) async {
-    if (!mounted) return;
+    if (!mounted) return; // Check if widget is still mounted
 
-    if (_selectedShiftId == shiftId && !_isLoadingCustomerSummary) {
-      setStateIfMounted(() => _isLoadingCustomerSummary = true);
-    } else if (_selectedShiftId != shiftId) {
+    // Check if the selected shift is still the one we are fetching for
+    if (_selectedShiftId != shiftId) {
       print(
           "Fetch summary for shift $shiftId aborted, selection changed to $_selectedShiftId");
+      if (mounted && _isLoadingCustomerSummary) {
+        setStateIfMounted(() => _isLoadingCustomerSummary = false);
+      }
       return;
+    }
+
+    // Ensure loading state is set
+    if (!_isLoadingCustomerSummary) {
+      setStateIfMounted(() => _isLoadingCustomerSummary = true);
     }
 
     final url =
@@ -1148,8 +1299,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (!mounted) return;
+      if (!mounted) return; // Check mounted after await
 
+      // Check if the selection is still the same
       if (_selectedShiftId == shiftId) {
         if (response.statusCode == 200) {
           final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -1157,69 +1309,102 @@ class _ManagementScreenState extends State<ManagementScreen> {
           setStateIfMounted(() {
             _selectedShiftTotalCustomers = summary.totalCustomers;
             _selectedShiftTotalSessions = summary.totalSessions;
-            _isLoadingCustomerSummary = false;
+            _isLoadingCustomerSummary = false; // Loading finished
           });
           print(
               "Fetched customer summary for shift $shiftId: Customers=${summary.totalCustomers}, Sessions=${summary.totalSessions}");
-        } else {
+        } else if (response.statusCode == 404) {
+          // Handle 404 - No summary data found (might be valid if no sessions)
           setStateIfMounted(() {
             _selectedShiftTotalCustomers = 0;
             _selectedShiftTotalSessions = 0;
-            _isLoadingCustomerSummary = false;
+            _isLoadingCustomerSummary = false; // Loading finished
+          });
+          print("Customer summary not found (404) for shift $shiftId.");
+        } else {
+          // Handle other errors
+          setStateIfMounted(() {
+            _selectedShiftTotalCustomers = 0; // Reset on error
+            _selectedShiftTotalSessions = 0;
+            _isLoadingCustomerSummary = false; // Loading finished (with error)
+            // Optionally set an error message if needed, but stats grid shows '...' anyway
           });
           print(
-              "Error or Not Found fetching customer summary (${response.statusCode}) for shift $shiftId");
+              "Error fetching customer summary (${response.statusCode}) for shift $shiftId");
         }
       } else {
+        // Data is stale
         print(
             "Ignoring stale customer summary data for shift $shiftId, current selection is $_selectedShiftId");
+        if (mounted && _isLoadingCustomerSummary) {
+          // Check mounted again
+          setStateIfMounted(() => _isLoadingCustomerSummary = false);
+        }
       }
     } catch (e) {
       print("Exception fetching customer summary for shift $shiftId: $e");
+      // Check mounted and selection before updating state
       if (mounted && _selectedShiftId == shiftId) {
         setStateIfMounted(() {
-          _selectedShiftTotalCustomers = 0;
+          _selectedShiftTotalCustomers = 0; // Reset on error
           _selectedShiftTotalSessions = 0;
-          _isLoadingCustomerSummary = false;
+          _isLoadingCustomerSummary = false; // Loading finished (with error)
+          // Optionally set an error message here
         });
+      } else if (mounted && _isLoadingCustomerSummary) {
+        setStateIfMounted(() => _isLoadingCustomerSummary = false);
       }
     }
   }
 
   Future<PaymentDetail> _fetchPaymentDetails(int paymentId) async {
+    // Note: No loading state change here, managed by _fetchingDetailsForPaymentIds set
     final url = Uri.parse('$BASE_API_URL/payment/$paymentId/detail');
     print("Fetching payment details for ID: $paymentId from $url");
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (!mounted) throw Exception("Component unmounted during fetch");
+      // No mounted check needed immediately after await *if* we don't update state here,
+      // but the calling function MUST check mounted before using the result.
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-        print("Payment details fetched: $data");
+        print("Payment details fetched for ID $paymentId: $data");
         return PaymentDetail.fromJson(data);
       } else if (response.statusCode == 404) {
         print("Payment details not found (404) for ID: $paymentId");
-        throw Exception('Không tìm thấy chi tiết (404)');
+        throw Exception('Không tìm thấy chi tiết hóa đơn #${paymentId} (404)');
       } else {
         print(
             "Error fetching payment details (${response.statusCode}) for ID: $paymentId");
-        throw Exception('Lỗi tải chi tiết (${response.statusCode})');
+        throw Exception(
+            'Lỗi tải chi tiết hóa đơn #${paymentId} (${response.statusCode})');
       }
     } catch (e) {
       print("Exception fetching payment details for ID $paymentId: $e");
-      if (e is Exception) {
+      if (e is TimeoutException) {
+        throw Exception(
+            'Hết thời gian chờ khi tải chi tiết hóa đơn #${paymentId}.');
+      }
+      if (e is Exception && e.toString().contains('Exception:')) {
+        // Rethrow exceptions already formatted from above checks
         rethrow;
       }
-      throw Exception('Lỗi kết nối');
+      // Generic connection/processing error
+      throw Exception(
+          'Lỗi kết nối hoặc xử lý khi tải chi tiết hóa đơn #${paymentId}.');
     }
   }
 
   Future<void> _showPaymentDetailsDialog(
       BuildContext context, PaymentDetail details) async {
+    // Ensure the widget is still mounted before showing the dialog
+    if (!mounted) return;
+
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
 
+    // Helper to build consistent list tiles for details
     Widget buildDetailTile(IconData icon, String label, String value) {
       return ListTile(
         leading: Icon(icon,
@@ -1228,11 +1413,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
         title: Text(label,
             style:
                 textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Text(value,
+        subtitle: Text(
+            value.isEmpty ? 'N/A' : value, // Show N/A if value is empty
             style: textTheme.bodyMedium?.copyWith(
                 color: textTheme.bodyMedium?.color?.withOpacity(0.9))),
-        dense: true,
+        dense: true, // Make tile more compact
         contentPadding: EdgeInsets.symmetric(vertical: 2, horizontal: 0),
+        minLeadingWidth: 30, // Adjust leading icon spacing
       );
     }
 
@@ -1241,39 +1428,50 @@ class _ManagementScreenState extends State<ManagementScreen> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text('Chi tiết Hóa đơn #${details.paymentId}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              buildDetailTile(Icons.table_restaurant_outlined, 'Số bàn',
-                  details.tableNumber?.toString() ?? 'N/A'),
-              Divider(height: 10, thickness: 0.5),
-              buildDetailTile(
-                  Icons.access_time_filled_rounded,
-                  'Giờ bắt đầu',
-                  details.startTime != null
-                      ? _dateTimeDetailFormatter.format(details.startTime!)
-                      : 'N/A'),
-              buildDetailTile(
-                  Icons.access_time_rounded,
-                  'Giờ kết thúc',
-                  details.endTime != null
-                      ? _dateTimeDetailFormatter.format(details.endTime!)
-                      : 'N/A'),
-              Divider(height: 10, thickness: 0.5),
-              buildDetailTile(Icons.people_alt_outlined, 'Số khách',
-                  details.numberOfCustomers?.toString() ?? 'N/A'),
-              buildDetailTile(Icons.restaurant_menu_rounded, 'Gói buffet',
-                  details.buffetPackage),
-            ],
+          // Use SingleChildScrollView to prevent overflow if content is long
+          content: SingleChildScrollView(
+            child: ListBody(
+              // ListBody arranges children vertically
+              children: <Widget>[
+                buildDetailTile(
+                    Icons.table_restaurant_outlined,
+                    'Số bàn',
+                    details.tableNumber?.toString() ??
+                        'Trực tiếp'), // Show 'Trực tiếp' if no table number
+                Divider(height: 10, thickness: 0.5),
+                buildDetailTile(
+                    Icons.access_time_filled_rounded,
+                    'Giờ vào bàn', // Changed label slightly
+                    details.startTime != null
+                        ? _dateTimeDetailFormatter.format(details.startTime!)
+                        : 'N/A'),
+                buildDetailTile(
+                    Icons.access_time_rounded,
+                    'Giờ thanh toán', // Changed label slightly (or use Payment time if endTime is null?)
+                    details.endTime != null
+                        ? _dateTimeDetailFormatter.format(details.endTime!)
+                        : 'N/A'), // Show N/A if endTime is null
+                Divider(height: 10, thickness: 0.5),
+                buildDetailTile(Icons.people_alt_outlined, 'Số khách',
+                    details.numberOfCustomers?.toString() ?? 'N/A'),
+                buildDetailTile(
+                    Icons.restaurant_menu_rounded,
+                    'Gói buffet',
+                    details.buffetPackage.isNotEmpty
+                        ? details.buffetPackage
+                        : 'Không xác định'), // Handle empty package name
+              ],
+            ),
           ),
           actions: <Widget>[
             TextButton(
               child: Text('Đóng'),
               onPressed: () {
-                Navigator.of(dialogContext).pop();
+                Navigator.of(dialogContext).pop(); // Close the dialog
               },
             ),
           ],
+          // Use theme defaults or customize padding/shape
           contentPadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 10.0),
           titlePadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 10.0),
           actionsPadding:
@@ -1284,101 +1482,137 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
-  // **CẬP NHẬT HÀM TRIGGER FETCH LỊCH SỬ**
+  // --- Trigger History Fetch (Handles both current and previous periods) ---
   Future<void> _triggerHistoryFetch({int? year, int? month, int? day}) async {
+    // Use provided values or fallback to current state selections
     year ??= _selectedHistoryYear;
-    month ??= _selectedHistoryMonth;
-    day ??= _selectedHistoryDay;
+    month = month ?? _selectedHistoryMonth; // Allow month to be null
+    day = day ?? _selectedHistoryDay; // Allow day to be null
 
+    // Basic validation: Year must be selected
     if (year == null) {
-      setStateIfMounted(() => _historyError = "Vui lòng chọn Năm để lọc.");
+      setStateIfMounted(() {
+        _historyError = "Vui lòng chọn Năm để xem lịch sử.";
+        _isLoadingHistory = false; // Ensure loading stops
+        _isLoadingPrevHistory = false;
+        // Clear previous data when validation fails
+        _historicalBills = [];
+        _historyTotalRevenue = 0.0;
+        _historyTotalBills = 0;
+        _historyTotalCustomers = 0;
+        _historyTotalSessions = 0;
+        _prevHistoryTotalRevenue = 0.0;
+        _prevHistoryTotalBills = 0;
+        _prevHistoryTotalCustomers = 0;
+        _prevHistoryTotalSessions = 0;
+      });
       return;
     }
 
+    // Set loading states and clear previous data/errors
     setStateIfMounted(() {
       _isLoadingHistory = true;
-      _isLoadingPrevHistory = true;
+      _isLoadingPrevHistory =
+          true; // Assume we'll fetch previous period initially
       _historyError = null;
-      _historySummaryError = null;
-      _historicalBills = [];
+      _historySummaryError = null; // Clear specific summary error too
+      _historicalBills = []; // Clear current results
       _historyTotalRevenue = 0.0;
       _historyTotalBills = 0;
       _historyTotalCustomers = 0;
       _historyTotalSessions = 0;
-      _prevHistoryTotalRevenue = 0.0;
+      _prevHistoryTotalRevenue = 0.0; // Clear previous results
       _prevHistoryTotalBills = 0;
       _prevHistoryTotalCustomers = 0;
       _prevHistoryTotalSessions = 0;
     });
 
-    // Xác định kỳ trước đó
+    // Determine the previous period based on the selected current period
     int? prevYear;
     int? prevMonth;
     int? prevDay;
-    if (day != null && month != null) {
-      try {
+    bool fetchPrevious = true; // Flag to control fetching previous period
+
+    try {
+      if (day != null && month != null) {
+        // Daily comparison: Previous day
         final current = DateTime(year, month, day);
         final previous = current.subtract(const Duration(days: 1));
         prevYear = previous.year;
         prevMonth = previous.month;
         prevDay = previous.day;
-      } catch (e) {
-        prevYear = null;
-      }
-    } else if (month != null) {
-      try {
+      } else if (month != null) {
+        // Monthly comparison: Previous month
         final current = DateTime(year, month);
-        final previous = DateTime(current.year, current.month - 1);
+        final previous =
+            DateTime(current.year, current.month - 1); // Handles year change
         prevYear = previous.year;
         prevMonth = previous.month;
-        prevDay = null;
-      } catch (e) {
-        prevYear = null;
-      }
-    } else {
-      try {
+        prevDay = null; // Compare whole months
+      } else {
+        // Yearly comparison: Previous year
         prevYear = year - 1;
         prevMonth = null;
         prevDay = null;
-      } catch (e) {
-        prevYear = null;
-      }
-    }
-
-    // Gọi song song các API
-    List<Future> fetches = [
-      _fetchPaymentHistoryData(year: year, month: month, day: day),
-      _fetchHistoryCustomerSummaryData(year: year, month: month, day: day),
-    ];
-    if (prevYear != null) {
-      fetches.add(_fetchPaymentHistoryData(
-          year: prevYear, month: prevMonth, day: prevDay, isPrevious: true));
-      fetches.add(_fetchHistoryCustomerSummaryData(
-          year: prevYear, month: prevMonth, day: prevDay, isPrevious: true));
-    } else {
-      setStateIfMounted(() => _isLoadingPrevHistory = false);
-    }
-
-    try {
-      await Future.wait(fetches);
-      // Gộp lỗi sau khi cả hai hoàn thành
-      if (_historySummaryError != null && _historyError == null) {
-        if (mounted) {
-          setState(() => _historyError = _historySummaryError);
-        }
       }
     } catch (e) {
-      print("Error during parallel history fetch: $e");
+      // Handle potential errors if date calculation fails (e.g., invalid input)
+      print("Error calculating previous period: $e");
+      fetchPrevious =
+          false; // Don't attempt to fetch previous if calculation failed
+      setStateIfMounted(() =>
+          _isLoadingPrevHistory = false); // Stop loading indicator for previous
+    }
+
+    // Create lists of futures for parallel fetching
+    List<Future> currentPeriodFetches = [
+      _fetchPaymentHistoryData(
+          year: year, month: month, day: day, isPrevious: false),
+      _fetchHistoryCustomerSummaryData(
+          year: year, month: month, day: day, isPrevious: false),
+    ];
+
+    List<Future> previousPeriodFetches = [];
+    if (fetchPrevious && prevYear != null) {
+      previousPeriodFetches = [
+        _fetchPaymentHistoryData(
+            year: prevYear, month: prevMonth, day: prevDay, isPrevious: true),
+        _fetchHistoryCustomerSummaryData(
+            year: prevYear, month: prevMonth, day: prevDay, isPrevious: true),
+      ];
+    } else {
+      // If not fetching previous, ensure loading state is off
+      if (mounted && _isLoadingPrevHistory) {
+        setStateIfMounted(() => _isLoadingPrevHistory = false);
+      }
+    }
+
+    // Execute fetches in parallel using Future.wait
+    try {
+      await Future.wait([...currentPeriodFetches, ...previousPeriodFetches]);
+      // After all futures complete, check for combined errors (summary error might have occurred)
       if (mounted) {
-        setState(() {
-          _historyError ??= 'Lỗi khi tải dữ liệu lịch sử.';
+        // Check mounted before final state update
+        setStateIfMounted(() {
+          // Prioritize payment list error if both exist
+          _historyError ??= _historySummaryError;
+        });
+      }
+    } catch (e) {
+      // Catch errors from Future.wait itself (though individual fetches handle their errors)
+      print("Error during parallel history fetch execution: $e");
+      if (mounted) {
+        setStateIfMounted(() {
+          _historyError ??= 'Lỗi khi tải dữ liệu lịch sử song song.';
         });
       }
     } finally {
+      // Ensure loading indicators are turned off regardless of success/failure
       if (mounted) {
-        setState(() {
+        setStateIfMounted(() {
           _isLoadingHistory = false;
-          if (prevYear != null) {
+          // Only turn off prev loading if it was ever true
+          if (_isLoadingPrevHistory) {
             _isLoadingPrevHistory = false;
           }
         });
@@ -1386,18 +1620,21 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
   }
 
-  // **CẬP NHẬT HÀM FETCH LỊCH SỬ ĐỂ LƯU DỮ LIỆU KỲ TRƯỚC**
+  // --- Fetch Payment History Data (for current or previous period) ---
   Future<void> _fetchPaymentHistoryData(
       {required int year,
       int? month,
       int? day,
-      bool isPrevious = false}) async {
+      required bool isPrevious}) async {
+    // Added required isPrevious flag
+    // Build query parameters
     final Map<String, String> queryParams = {'year': year.toString()};
     if (month != null) {
       queryParams['month'] = month.toString();
-    }
-    if (day != null && month != null) {
-      queryParams['day'] = day.toString();
+      // Only include day if month is also specified
+      if (day != null) {
+        queryParams['day'] = day.toString();
+      }
     }
 
     final url = Uri.parse('$BASE_API_URL/payment/history/')
@@ -1407,35 +1644,47 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 20));
-      if (!mounted) return; // Check mounted sau await
+      if (!mounted) return; // Check mounted after await
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         final historyResponse = PaymentHistoryResponse.fromJson(data);
+        // Sort payments by time, newest first
+        historyResponse.payments
+            .sort((a, b) => b.paymentTime.compareTo(a.paymentTime));
 
+        // Update the correct state variables based on isPrevious flag
         if (!isPrevious) {
           setStateIfMounted(() {
             _historicalBills = historyResponse.payments;
             _historyTotalRevenue = historyResponse.totalRevenue;
             _historyTotalBills = historyResponse.payments.length;
+            // Clear specific error for this fetch on success
+            if (_historyError != null && _historyError!.contains('phiếu')) {
+              _historyError =
+                  _historySummaryError; // Keep summary error if it exists
+            }
           });
         } else {
           setStateIfMounted(() {
             _prevHistoryTotalRevenue = historyResponse.totalRevenue;
             _prevHistoryTotalBills = historyResponse.payments.length;
+            // No error state needed for previous period, comparison just won't show % change
           });
         }
         print(
-            "Fetched ${historyResponse.payments.length} $periodDesc historical payments data. Total Revenue: ${historyResponse.totalRevenue}");
-      } else {
+            "Fetched ${historyResponse.payments.length} $periodDesc historical payments. Total: ${_currencyFormatter.format(historyResponse.totalRevenue)}");
+      } else if (response.statusCode == 404) {
+        // Handle 404 (Not Found) - Valid scenario, means no data for the period
+        print("No $periodDesc payment history data found (404) for period.");
         if (!isPrevious) {
           setStateIfMounted(() {
             _historicalBills = [];
             _historyTotalRevenue = 0.0;
             _historyTotalBills = 0;
-            if (response.statusCode != 404) {
-              _historyError =
-                  'Lỗi tải danh sách phiếu (${response.statusCode})';
+            // Clear specific error for this fetch if it was 404
+            if (_historyError != null && _historyError!.contains('phiếu')) {
+              _historyError = _historySummaryError;
             }
           });
         } else {
@@ -1444,19 +1693,39 @@ class _ManagementScreenState extends State<ManagementScreen> {
             _prevHistoryTotalBills = 0;
           });
         }
+      } else {
+        // Handle other non-200 errors
         print(
-            "Error or Not Found fetching $periodDesc payment history data (${response.statusCode}).");
+            "Error fetching $periodDesc payment history data (${response.statusCode}).");
+        if (!isPrevious) {
+          setStateIfMounted(() {
+            _historicalBills = []; // Clear data on error
+            _historyTotalRevenue = 0.0;
+            _historyTotalBills = 0;
+            _historyError =
+                'Lỗi tải danh sách phiếu (${response.statusCode})'; // Set error message
+          });
+        } else {
+          // For previous period, just reset values, don't show direct error
+          setStateIfMounted(() {
+            _prevHistoryTotalRevenue = 0.0;
+            _prevHistoryTotalBills = 0;
+          });
+        }
       }
     } catch (e) {
       print("Exception fetching $periodDesc payment history data: $e");
+      if (!mounted) return; // Check mounted in catch block
       if (!isPrevious) {
         setStateIfMounted(() {
           _historicalBills = [];
           _historyTotalRevenue = 0.0;
           _historyTotalBills = 0;
-          _historyError = 'Lỗi kết nối (danh sách phiếu).';
+          _historyError =
+              'Lỗi kết nối (danh sách phiếu).'; // Set connection error message
         });
       } else {
+        // For previous period, just reset values on exception
         setStateIfMounted(() {
           _prevHistoryTotalRevenue = 0.0;
           _prevHistoryTotalBills = 0;
@@ -1465,18 +1734,21 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
   }
 
-  // **CẬP NHẬT HÀM FETCH SUMMARY LỊCH SỬ ĐỂ LƯU DỮ LIỆU KỲ TRƯỚC**
+  // --- Fetch History Customer Summary Data (for current or previous period) ---
   Future<void> _fetchHistoryCustomerSummaryData(
       {required int year,
       int? month,
       int? day,
-      bool isPrevious = false}) async {
+      required bool isPrevious}) async {
+    // Added required isPrevious flag
+    // Build query parameters
     final Map<String, String> queryParams = {'year': year.toString()};
     if (month != null) {
       queryParams['month'] = month.toString();
-    }
-    if (day != null && month != null) {
-      queryParams['day'] = day.toString();
+      // Only include day if month is also specified
+      if (day != null) {
+        queryParams['day'] = day.toString();
+      }
     }
 
     final url = Uri.parse('$BASE_API_URL/payment/total-customers/by-date/')
@@ -1486,16 +1758,19 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (!mounted) return; // Check mounted sau await
+      if (!mounted) return; // Check mounted after await
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         final summary = HistoryCustomerSummary.fromJson(data);
+
+        // Update the correct state variables based on isPrevious flag
         if (!isPrevious) {
           setStateIfMounted(() {
             _historyTotalCustomers = summary.totalCustomers;
             _historyTotalSessions = summary.totalSessions;
-            _historySummaryError = null;
+            _historySummaryError =
+                null; // Clear specific summary error on success
           });
         } else {
           setStateIfMounted(() {
@@ -1505,14 +1780,15 @@ class _ManagementScreenState extends State<ManagementScreen> {
         }
         print(
             "Fetched $periodDesc history customer summary: Cust=${summary.totalCustomers}, Sess=${summary.totalSessions}");
-      } else {
+      } else if (response.statusCode == 404) {
+        // Handle 404 (Not Found) - Valid, means no customers/sessions found
+        print(
+            "No $periodDesc history customer summary data found (404) for period.");
         if (!isPrevious) {
           setStateIfMounted(() {
             _historyTotalCustomers = 0;
             _historyTotalSessions = 0;
-            if (response.statusCode != 404) {
-              _historySummaryError = 'Lỗi tải tóm tắt (${response.statusCode})';
-            }
+            _historySummaryError = null; // Clear error on 404
           });
         } else {
           setStateIfMounted(() {
@@ -1520,24 +1796,150 @@ class _ManagementScreenState extends State<ManagementScreen> {
             _prevHistoryTotalSessions = 0;
           });
         }
+      } else {
+        // Handle other non-200 errors
         print(
-            "Error or Not Found fetching $periodDesc history customer summary (${response.statusCode}).");
+            "Error fetching $periodDesc history customer summary (${response.statusCode}).");
+        if (!isPrevious) {
+          setStateIfMounted(() {
+            _historyTotalCustomers = 0; // Reset on error
+            _historyTotalSessions = 0;
+            _historySummaryError =
+                'Lỗi tải tóm tắt khách (${response.statusCode})'; // Set specific error
+          });
+        } else {
+          // For previous period, just reset values
+          setStateIfMounted(() {
+            _prevHistoryTotalCustomers = 0;
+            _prevHistoryTotalSessions = 0;
+          });
+        }
       }
     } catch (e) {
       print("Exception fetching $periodDesc history customer summary: $e");
+      if (!mounted) return; // Check mounted in catch block
       if (!isPrevious) {
         setStateIfMounted(() {
           _historyTotalCustomers = 0;
           _historyTotalSessions = 0;
-          _historySummaryError = 'Lỗi kết nối (tóm tắt).';
+          _historySummaryError =
+              'Lỗi kết nối (tóm tắt khách).'; // Set connection error
         });
       } else {
+        // For previous period, just reset values on exception
         setStateIfMounted(() {
           _prevHistoryTotalCustomers = 0;
           _prevHistoryTotalSessions = 0;
         });
       }
     }
+  }
+
+  // --- Helper function to show secret code dialog ---
+  Future<void> _showSecretCodeDialog(BuildContext context, Shift shift) async {
+    if (!mounted) return; // Check if mounted before showing dialog
+
+    final theme = Theme.of(context);
+    final formatTime = _timeFormatter;
+    final shiftTimeStr =
+        'Ca ${formatTime.format(shift.startTime)} - ${formatTime.format(shift.endTime)} (${_dateFormatter.format(shift.startTime)})'; // Add date
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true, // Allow dismissing by tapping outside
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Secret code', style: theme.dialogTheme.titleTextStyle),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text(
+                  shiftTimeStr,
+                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 12.5),
+                ),
+                SizedBox(height: 15),
+                Text(
+                  'Secret code cho ca này:',
+                  style: theme.dialogTheme.contentTextStyle,
+                ),
+                SizedBox(height: 8),
+                // Use a Card for better visual separation of the code
+                Card(
+                  elevation: 0.5,
+                  color: theme.inputDecorationTheme.fillColor ??
+                      theme.colorScheme.surface.withOpacity(0.5),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10.0, horizontal: 15.0),
+                    child: SelectableText(
+                      shift.secretCode.isNotEmpty
+                          ? shift.secretCode
+                          : 'N/A', // Handle potential empty code
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: shift.secretCode.isNotEmpty
+                            ? theme.colorScheme.secondary
+                            : theme.textTheme.bodySmall?.color, // Dim 'N/A'
+                        fontSize: 18,
+                        letterSpacing: 1.5, // Add spacing for readability
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 15),
+                // Copy button
+                if (shift.secretCode.isNotEmpty &&
+                    shift.secretCode !=
+                        'N/A') // Only show copy if there's a code
+                  Center(
+                    child: OutlinedButton.icon(
+                        icon: Icon(Icons.copy_all_outlined, size: 16),
+                        label: Text('Sao chép'),
+                        onPressed: () {
+                          Clipboard.setData(
+                              ClipboardData(text: shift.secretCode));
+                          // Close dialog *before* showing snackbar for better UX
+                          Navigator.of(dialogContext).pop();
+                          // Check mounted again before showing snackbar
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Đã sao chép secret code!'),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: Colors.green.shade700,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        style: theme.outlinedButtonTheme.style?.copyWith(
+                            padding: MaterialStateProperty.all(
+                                EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8)))),
+                  ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Đóng'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+          ],
+          actionsPadding:
+              const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          contentPadding: const EdgeInsets.fromLTRB(
+              20.0, 15.0, 20.0, 10.0), // Adjusted padding
+          titlePadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 10.0),
+          shape: theme.dialogTheme.shape, // Use theme shape
+        );
+      },
+    );
   }
 
   // --- Build Method Chính ---
@@ -1548,116 +1950,233 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Hamburger menu icon
         leading: Builder(
           builder: (context) => IconButton(
-            icon: Icon(Icons.menu_rounded, color: theme.iconTheme.color),
+            icon: Icon(Icons.menu_rounded), // Use rounded menu icon
             tooltip: 'Mở menu',
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        leadingWidth: 70,
-        title: Text('Quản Lý Bán Hàng', style: theme.appBarTheme.titleTextStyle),
+        leadingWidth: 56, // Standard width for leading icon button
+        title: Text(
+            'Quản Lý Bán Hàng'), // Removed style override, uses AppBarTheme
         actions: [
+          // Refresh Button (conditional based on view)
+          if (_currentViewIndex == 0 &&
+              _selectedShiftId !=
+                  null) // Show only for current shift view if a shift is selected
+            IconButton(
+              icon: Icon(Icons.refresh_rounded, size: 22),
+              tooltip: 'Làm mới dữ liệu ca',
+              onPressed: (_isLoadingShiftPayments || _isLoadingCustomerSummary)
+                  ? null
+                  : () {
+                      // Trigger refresh for the selected shift
+                      if (_selectedShiftId != null) {
+                        _fetchPaymentsForShift(_selectedShiftId!);
+                        _fetchShiftCustomerSummary(_selectedShiftId!);
+                      }
+                    },
+            ),
+          if (_currentViewIndex == 1 &&
+              _selectedHistoryYear !=
+                  null) // Show only for history view if a year is selected
+            IconButton(
+              icon: Icon(Icons.refresh_rounded, size: 22),
+              tooltip: 'Làm mới lịch sử',
+              onPressed: (_isLoadingHistory || _isLoadingPrevHistory)
+                  ? null
+                  : () {
+                      // Trigger refresh for the selected history period
+                      _triggerHistoryFetch();
+                    },
+            ),
+
+          // Notifications Button
           IconButton(
             icon: Icon(Icons.notifications_none_outlined, size: 22),
             tooltip: 'Thông báo',
-            onPressed: () {/* Handle notifications */},
-          ),
-          // Nút thoát
-          IconButton(
-            icon: Icon(Icons.exit_to_app, color: theme.iconTheme.color),
-            tooltip: 'Thoát',
             onPressed: () {
+              // TODO: Implement notification handling
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text('Chức năng thông báo chưa được cài đặt.')),
+              );
+            },
+          ),
+          // Exit Button - Navigates back to TableSelectionScreen
+          IconButton(
+            icon: Icon(Icons.exit_to_app), // Standard exit icon
+            tooltip: 'Về màn hình chọn bàn', // More descriptive tooltip
+            onPressed: () {
+              // Use pushReplacement to prevent user from navigating back to ManagementScreen
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
                   builder: (context) => TableSelectionScreen(
+                    // Pass the role back or retrieve it from auth state
                     role: widget.role,
                   ),
                 ),
-              ); // Quay lại trang trước
+              );
             },
           ),
+          SizedBox(width: 8), // Add some padding to the right of actions
         ],
+        // AppBar theme is applied automatically from ThemeData
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            DrawerHeader(
-              decoration: BoxDecoration(color: theme.colorScheme.secondary),
-              child: Text(
-                'MENU QUẢN LÝ',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: theme.colorScheme.onSecondary,
-                  fontSize: 20,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.schedule_rounded,
-                color: _currentViewIndex == 0 ? theme.colorScheme.secondary : null,
-                size: 20,
-              ),
-              title: Text(
-                'Ca Trực Hiện Tại',
-                style: TextStyle(
-                  fontWeight:
-                  _currentViewIndex == 0 ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 14,
-                ),
-              ),
-              selected: _currentViewIndex == 0,
-              selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
-              onTap: () {
-                if (_currentViewIndex != 0) {
-                  setState(() => _currentViewIndex = 0);
-                }
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.history_rounded,
-                color: _currentViewIndex == 1 ? theme.colorScheme.secondary : null,
-                size: 20,
-              ),
-              title: Text(
-                'Lịch Sử Bán Hàng',
-                style: TextStyle(
-                    fontWeight: _currentViewIndex == 1
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    fontSize: 14)),
-            selected: _currentViewIndex == 1,
-            selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
-            onTap: () {
-              if (_currentViewIndex != 1) {
-                setState(() => _currentViewIndex = 1);
-              }
-              Navigator.pop(context);
-            }),
-        Divider(),
-      ])),
+      drawer: _buildAppDrawer(theme), // Use a separate method for the drawer
       body: Padding(
         padding: EdgeInsets.all(kPagePadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Statistics Grid
             _buildStatsGrid(context, theme),
-            SizedBox(height: kPagePadding),
+            SizedBox(height: kPagePadding), // Spacing below stats
+
+            // Main Content Area (IndexedStack for switching views)
             Expanded(
               child: IndexedStack(
                 index: _currentViewIndex,
                 children: [
+                  // View 0: Current Shift View
                   _buildCurrentShiftView(theme),
+                  // View 1: History View
                   _buildHistoryView(theme),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- Helper Widget to build the App Drawer ---
+  Widget _buildAppDrawer(ThemeData theme) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero, // Remove default padding
+        children: <Widget>[
+          DrawerHeader(
+            decoration: BoxDecoration(
+                // Use secondary color from theme for header background
+                color: theme.colorScheme.secondary),
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: Text(
+                'QUẢN LÝ NHÀ HÀNG', // Or a more specific title
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: theme.colorScheme
+                      .onSecondary, // Use onSecondary color for text
+                  fontSize: 20,
+                ),
+              ),
+            ),
+          ),
+          // Menu Item: Current Shift
+          ListTile(
+            leading: Icon(
+              Icons.schedule_rounded, // Use rounded icon
+              color: _currentViewIndex == 0
+                  ? theme.colorScheme.secondary
+                  : theme.listTileTheme.iconColor,
+              size: 22, // Slightly larger icon
+            ),
+            title: Text(
+              'Ca Trực Hiện Tại',
+              style: TextStyle(
+                fontWeight: _currentViewIndex == 0
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+                fontSize: 14,
+                color: _currentViewIndex == 0
+                    ? theme.colorScheme.secondary
+                    : theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            selected: _currentViewIndex == 0,
+            selectedTileColor: theme.colorScheme.secondary
+                .withOpacity(0.1), // Subtle selection highlight
+            onTap: () {
+              if (_currentViewIndex != 0) {
+                setState(() => _currentViewIndex = 0);
+                // Optionally, trigger a refresh of shift data if needed when switching back
+                // _fetchShifts(); // Uncomment if you want to always refresh shifts on view change
+              }
+              Navigator.pop(context); // Close the drawer
+            },
+            contentPadding: EdgeInsets.symmetric(
+                horizontal: 20, vertical: 4), // Adjust padding
+          ),
+          // Menu Item: Sales History
+          ListTile(
+            leading: Icon(
+              Icons.history_rounded, // Use rounded icon
+              color: _currentViewIndex == 1
+                  ? theme.colorScheme.secondary
+                  : theme.listTileTheme.iconColor,
+              size: 22,
+            ),
+            title: Text(
+              'Lịch Sử Bán Hàng',
+              style: TextStyle(
+                fontWeight: _currentViewIndex == 1
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+                fontSize: 14,
+                color: _currentViewIndex == 1
+                    ? theme.colorScheme.secondary
+                    : theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            selected: _currentViewIndex == 1,
+            selectedTileColor: theme.colorScheme.secondary.withOpacity(0.1),
+            onTap: () {
+              if (_currentViewIndex != 1) {
+                setState(() => _currentViewIndex = 1);
+                // Optionally, trigger a refresh of history data if needed
+                // _triggerHistoryFetch(); // Uncomment if needed
+              }
+              Navigator.pop(context); // Close the drawer
+            },
+            contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          ),
+          Divider(height: 1, indent: 20, endIndent: 20), // Add a divider
+          // Add more menu items here if needed (e.g., Settings, Reports)
+          // Example:
+          /*
+             ListTile(
+               leading: Icon(Icons.settings_outlined, size: 22),
+               title: Text('Cài đặt', style: TextStyle(fontSize: 14)),
+               onTap: () {
+                  // Navigate to settings or perform action
+                  Navigator.pop(context);
+               },
+               contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+             ),
+             */
+          // Logout or Exit option at the bottom
+          SizedBox(height: 20), // Spacer
+          ListTile(
+            leading: Icon(Icons.exit_to_app,
+                size: 22, color: theme.colorScheme.error),
+            title: Text('Về màn hình chính',
+                style: TextStyle(fontSize: 14, color: theme.colorScheme.error)),
+            onTap: () {
+              Navigator.pop(context); // Close drawer first
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TableSelectionScreen(role: widget.role),
+                ),
+              );
+            },
+            contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          ),
+        ],
       ),
     );
   }
@@ -1671,50 +2190,74 @@ class _ManagementScreenState extends State<ManagementScreen> {
     final dividerThickness = theme.dividerTheme.thickness ?? 1.0;
 
     return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.stretch, // Ensure children fill width
       children: [
-        _buildShiftSelector(theme, _tableCellHorizontalPadding * 2),
-        SizedBox(height: _tableCellHorizontalPadding * 2),
+        // Shift Selector Row
+        _buildShiftSelector(
+            theme, _tableCellHorizontalPadding * 2), // Pass padding
+        SizedBox(
+            height: _tableCellHorizontalPadding * 2), // Spacing below selector
+
+        // Payment Table Card
         Expanded(
           child: Card(
-            clipBehavior: Clip.antiAlias,
+            clipBehavior: Clip.antiAlias, // Clip content to card shape
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Table Header Row
                 _buildTableRow(
                   theme: theme,
                   height: _tableHeaderHeight,
                   isHeader: true,
                   backgroundColor: headerBackgroundColor,
                   cells: [
-                    Text('MÃ HĐ'), // 0
-                    Text('TRẠNG THÁI'), // 1
-                    Text('TG THANH TOÁN'), // 2
-                    Text('PT THANH TOÁN'), // 3
-                    Text('TỔNG TIỀN'), // 4
-                    Text('CHI TIẾT'), // 5
+                    Text('MÃ HĐ'), // 0: ID
+                    Text('TRẠNG THÁI'), // 1: Status
+                    Text('TG THANH TOÁN'), // 2: Payment Time
+                    Text('PT THANH TOÁN'), // 3: Payment Method
+                    Text('TỔNG TIỀN'), // 4: Amount
+                    Text('CHI TIẾT'), // 5: Details Button
                   ],
                 ),
+                // Header Divider
                 Divider(
                     height: dividerThickness,
                     thickness: dividerThickness,
                     color: dividerColor),
+
+                // Table Body (Scrollable Content)
                 Expanded(
+                  // Use RefreshIndicator for pull-to-refresh
                   child: RefreshIndicator(
                     onRefresh: () async {
+                      // Only allow refresh if a shift is selected and not currently loading
                       if (_selectedShiftId != null &&
                           !_isLoadingShiftPayments &&
                           !_isLoadingCustomerSummary) {
+                        print("Refreshing data for shift $_selectedShiftId");
+                        // Fetch both payments and summary concurrently
                         await Future.wait([
                           _fetchPaymentsForShift(_selectedShiftId!),
                           _fetchShiftCustomerSummary(_selectedShiftId!),
                         ]);
+                      } else {
+                        print(
+                            "Refresh skipped: No shift selected or already loading.");
                       }
                     },
-                    color: theme.colorScheme.secondary,
-                    backgroundColor: theme.cardTheme.color ?? Colors.white,
-                    child: _buildShiftPaymentsContent(theme),
+                    color:
+                        theme.colorScheme.secondary, // Refresh indicator color
+                    backgroundColor: theme.cardTheme.color ??
+                        Colors.white, // Background of indicator
+                    child: _buildShiftPaymentsContent(
+                        theme), // Builds the list or messages
                   ),
                 ),
+
+                // Table Footer Row (Optional, mirroring header)
+                // Show footer only if there are payments and no loading/error
                 if (!_isLoadingShiftPayments &&
                     _paymentError == null &&
                     _shiftPayments.isNotEmpty) ...[
@@ -1725,7 +2268,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   _buildTableRow(
                     theme: theme,
                     height: _tableHeaderHeight,
-                    isHeader: true,
+                    isHeader: true, // Use header style for consistency
                     backgroundColor: headerBackgroundColor,
                     cells: [
                       Text('MÃ HĐ'), // 0
@@ -1749,55 +2292,113 @@ class _ManagementScreenState extends State<ManagementScreen> {
   Widget _buildShiftPaymentsContent(ThemeData theme) {
     final dividerColor = theme.dividerTheme.color ?? Colors.grey.shade300;
     final dividerThickness = theme.dividerTheme.thickness ?? 1.0;
-    final Color oddRowColor = Colors.grey.shade200;
 
-    // --- Handle Loading, Error, Empty States ---
+    // --- Handle Loading State ---
+    // Show loading indicator if EITHER payments OR summary is loading,
+    // AND the list of payments is currently empty (to avoid showing loading over existing data).
     if ((_isLoadingShiftPayments || _isLoadingCustomerSummary) &&
+        _shiftPayments.isEmpty &&
         _selectedShiftId != null) {
-      if (_shiftPayments.isEmpty) {
-        return Center(
-            child:
-                CircularProgressIndicator(color: theme.colorScheme.secondary));
-      }
+      return Center(
+          child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: CircularProgressIndicator(color: theme.colorScheme.secondary),
+      ));
     }
+
+    // --- Handle Error State ---
+    // Show payment-specific error if it exists
     if (_paymentError != null && _selectedShiftId != null) {
       return Center(
         child: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text(_paymentError!,
+            child: Column(
+              // Use column for text and potential retry button
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline,
+                    color: theme.colorScheme.error, size: 30),
+                SizedBox(height: 10),
+                Text(_paymentError!,
+                    style: TextStyle(color: theme.colorScheme.error),
+                    textAlign: TextAlign.center),
+                SizedBox(height: 15),
+                ElevatedButton.icon(
+                    icon: Icon(Icons.refresh, size: 18),
+                    label: Text("Thử lại"),
+                    onPressed: () {
+                      if (_selectedShiftId != null) {
+                        _fetchPaymentsForShift(_selectedShiftId!);
+                        _fetchShiftCustomerSummary(
+                            _selectedShiftId!); // Also retry summary
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.error,
+                      foregroundColor: theme.colorScheme.onError,
+                    ))
+              ],
+            )),
+      );
+    }
+
+    // --- Handle Initial Loading State (Before shifts are fetched) ---
+    if (_isLoadingShifts && _shifts.isEmpty) {
+      return Center(
+          child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text("Đang tải danh sách ca...",
+                  style: theme.textTheme.bodyMedium)));
+    }
+    // --- Handle Error Fetching Shifts ---
+    if (_shiftError != null && _shifts.isEmpty) {
+      return Center(
+        child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(_shiftError!,
                 style: TextStyle(color: theme.colorScheme.error),
                 textAlign: TextAlign.center)),
       );
     }
-    if (_isLoadingShifts && _shifts.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_shiftError != null && _shifts.isEmpty) {
-      return Center(
-          child: Text(_shiftError!,
-              style: TextStyle(color: theme.colorScheme.error),
-              textAlign: TextAlign.center));
-    }
+
+    // --- Handle No Shift Selected State ---
     if (_selectedShiftId == null && !_isLoadingShifts) {
       return Center(
-          child:
-              Text("Vui lòng chọn một ca.", style: theme.textTheme.bodyMedium));
+          child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text(
+            _shifts.isEmpty
+                ? "Không có ca nào được tìm thấy."
+                : "Vui lòng chọn một ca từ danh sách trên.", // More informative message
+            style: theme.textTheme.bodyMedium,
+            textAlign: TextAlign.center),
+      ));
     }
+
+    // --- Handle Empty State (Shift selected, no payments, no error) ---
+    // Check after loading and errors are handled
     if (!_isLoadingShiftPayments &&
         !_isLoadingCustomerSummary &&
         _shiftPayments.isEmpty &&
         _paymentError == null &&
         _selectedShiftId != null) {
+      // Use LayoutBuilder and SingleChildScrollView to ensure "empty" message
+      // is centered even if the list view area is large, and allows pull-to-refresh.
       return LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
+          physics:
+              AlwaysScrollableScrollPhysics(), // Enable refresh even when empty
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            constraints: BoxConstraints(
+                minHeight: constraints.maxHeight), // Fill viewport height
             child: Center(
               child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text("Chưa có phiếu trong ca này.",
-                      style: theme.textTheme.bodyMedium)),
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                      "Chưa có hóa đơn nào được ghi nhận trong ca này.", // Clearer message
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: Colors.grey.shade600),
+                      textAlign: TextAlign.center)),
             ),
           ),
         ),
@@ -1805,49 +2406,62 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
 
     // --- Display Data Rows ---
-    if (_shiftPayments.isNotEmpty && _paymentError == null) {
+    // Only build the ListView if payments exist and there's no error blocking display
+    if (_shiftPayments.isNotEmpty) {
       return ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics:
+            const AlwaysScrollableScrollPhysics(), // Enable scrolling & refresh
         itemCount: _shiftPayments.length,
         separatorBuilder: (context, index) => Divider(
             height: dividerThickness,
             thickness: dividerThickness,
-            color: dividerColor.withOpacity(0.6)),
+            color:
+                dividerColor.withOpacity(0.6)), // Slightly transparent divider
         itemBuilder: (context, index) {
           final payment = _shiftPayments[index];
+          // Assume status is always 'Hoàn thành' for payments retrieved from this endpoint
           final statusText = "Hoàn thành";
+          // Check if details are currently being fetched for this specific payment
           final bool isLoadingDetails =
               _fetchingDetailsForPaymentIds.contains(payment.paymentId);
 
           return _buildTableRow(
             theme: theme,
             height: _tableRowHeight,
-            backgroundColor: index % 2 != 0 ? oddRowColor : null,
+            // Apply alternating row color for better readability
+            backgroundColor: index % 2 != 0 ? _oddRowColor : null,
             cells: [
-              // 0: MÃ HĐ
+              // 0: MÃ HĐ (Payment ID)
               Text(payment.paymentId.toString(),
                   style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.secondary)),
-              // 1: TRẠNG THÁI
+                      color: theme.colorScheme.secondary)), // Highlight ID
+              // 1: TRẠNG THÁI (Status Chip)
               _buildStatusChip(theme, statusText),
-              // 2: TG THANH TOÁN
+              // 2: TG THANH TOÁN (Payment Time)
               Text(_fullDateTimeFormatter.format(payment.paymentTime),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
-              // 3: PT THANH TOÁN
-              Text(payment.paymentMethod,
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              // 4: TỔNG TIỀN
-              Text(_currencyFormatter.format(payment.amount)),
-              // 5: CHI TIẾT
+              // 3: PT THANH TOÁN (Payment Method)
+              Tooltip(
+                // Add tooltip for potentially long method names
+                message: payment.paymentMethod,
+                child: Text(payment.paymentMethod,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              // 4: TỔNG TIỀN (Amount) - Align Right
+              Text(_currencyFormatter.format(payment.amount),
+                  textAlign: TextAlign.right),
+              // 5: CHI TIẾT (Details Button)
               OutlinedButton(
                 onPressed: isLoadingDetails
-                    ? null
+                    ? null // Disable button while loading details
                     : () async {
+                        // Optimistically add to fetching set and show loading indicator
                         if (!mounted) return;
                         setStateIfMounted(() => _fetchingDetailsForPaymentIds
                             .add(payment.paymentId));
 
+                        // Show a temporary snackbar indicating loading
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Row(
@@ -1857,65 +2471,91 @@ class _ManagementScreenState extends State<ManagementScreen> {
                                     height: 18,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        color: theme.colorScheme.onPrimary)),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(theme
+                                                .colorScheme
+                                                .onSecondary))), // Use onSecondary
                                 SizedBox(width: 15),
-                                Text('Đang tải chi tiết...',
+                                Text(
+                                    'Đang tải chi tiết hóa đơn #${payment.paymentId}...',
                                     style: TextStyle(
-                                        color: theme.colorScheme.onPrimary)),
+                                        color: theme.colorScheme
+                                            .onSecondary)), // Use onSecondary
                               ],
                             ),
-                            duration: Duration(seconds: 30),
-                            backgroundColor:
-                                theme.colorScheme.secondary.withOpacity(0.9),
+                            duration: Duration(
+                                seconds:
+                                    30), // Long duration, will be hidden manually
+                            backgroundColor: theme.colorScheme.secondary
+                                .withOpacity(0.95), // Use secondary color
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
+                            margin: EdgeInsets.all(10), // Add margin
                           ),
                         );
 
                         try {
+                          // Fetch the details
                           final details =
                               await _fetchPaymentDetails(payment.paymentId);
+                          // Check mounted AGAIN after await before interacting with context
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                          _showPaymentDetailsDialog(context, details);
+                          ScaffoldMessenger.of(context)
+                              .hideCurrentSnackBar(); // Hide loading snackbar
+                          _showPaymentDetailsDialog(
+                              context, details); // Show the details dialog
                         } catch (e) {
+                          // Check mounted AGAIN after await before interacting with context
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context)
+                              .hideCurrentSnackBar(); // Hide loading snackbar
+                          // Show error snackbar
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Lỗi: ${e.toString()}'),
+                              content: Text(
+                                  'Lỗi tải chi tiết: ${e.toString().replaceFirst("Exception: ", "")}'), // Clean up error message
                               backgroundColor: theme.colorScheme.error,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
+                              margin: EdgeInsets.all(10), // Add margin
                             ),
                           );
                         } finally {
-                          setStateIfMounted(() => _fetchingDetailsForPaymentIds
-                              .remove(payment.paymentId));
+                          // Always remove from fetching set, check mounted
+                          if (mounted) {
+                            setStateIfMounted(() =>
+                                _fetchingDetailsForPaymentIds
+                                    .remove(payment.paymentId));
+                          }
                         }
                       },
+                // Style the button to be small and compact
                 style: theme.outlinedButtonTheme.style?.copyWith(
-                    padding: MaterialStateProperty.all(
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                    padding: MaterialStateProperty.all(EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4)), // Compact padding
                     textStyle: MaterialStateProperty.all(theme
-                        .textTheme.labelSmall
+                        .textTheme.labelSmall // Use smaller text style
                         ?.copyWith(fontWeight: FontWeight.w500, fontSize: 11)),
-                    minimumSize: MaterialStateProperty.all(Size(40, 26))),
+                    minimumSize: MaterialStateProperty.all(
+                        Size(40, 26))), // Set min size
                 child: isLoadingDetails
                     ? SizedBox(
+                        // Show a small progress indicator inside the button
                         width: 12,
                         height: 12,
                         child: CircularProgressIndicator(
                             strokeWidth: 1.5, color: theme.colorScheme.primary))
-                    : const Text('Xem'),
+                    : const Text('Xem'), // Button text
               ),
             ],
           );
         },
       );
     }
+
+    // Fallback if none of the above conditions are met (should be rare)
     return const SizedBox.shrink();
   }
 
@@ -1926,8 +2566,16 @@ class _ManagementScreenState extends State<ManagementScreen> {
             Colors.blue.shade100;
     final dividerColor = theme.dividerTheme.color ?? Colors.grey.shade300;
     final dividerThickness = theme.dividerTheme.thickness ?? 1.0;
-    final kFilterSpacing = 10.0;
+    final kFilterSpacing = 10.0; // Spacing between filter elements
 
+    // --- Dropdown Items ---
+    // Year Dropdown Items
+    final List<DropdownMenuItem<int>> yearItems = _years
+        .map((year) =>
+            DropdownMenuItem<int>(value: year, child: Text(year.toString())))
+        .toList();
+
+    // Month Dropdown Items (including "All")
     final List<DropdownMenuItem<int?>> monthItems = [
       const DropdownMenuItem<int?>(value: null, child: Text("Tất cả tháng")),
       ...List.generate(
@@ -1936,11 +2584,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
               value: i + 1, child: Text("Tháng ${i + 1}"))),
     ];
 
+    // Day Dropdown Items (dynamically generated based on selected month/year)
     List<DropdownMenuItem<int?>> dayItems = [
       const DropdownMenuItem<int?>(value: null, child: Text("Tất cả ngày")),
     ];
     if (_selectedHistoryMonth != null && _selectedHistoryYear != null) {
       try {
+        // Calculate days in the selected month and year
         final daysInMonth = DateUtils.getDaysInMonth(
             _selectedHistoryYear!, _selectedHistoryMonth!);
         dayItems.addAll(List.generate(
@@ -1948,101 +2598,158 @@ class _ManagementScreenState extends State<ManagementScreen> {
             (i) => DropdownMenuItem<int?>(
                 value: i + 1, child: Text("Ngày ${i + 1}"))));
       } catch (e) {
-        print("Lỗi tính ngày trong tháng: $e");
+        // Handle potential errors (e.g., invalid month/year combination)
+        print("Lỗi tính ngày trong tháng cho bộ lọc: $e");
+        // Keep dayItems as just "Tất cả ngày"
       }
     }
 
+    // Determine if the day dropdown should be enabled
+    final bool isDayFilterEnabled = _selectedHistoryMonth != null;
+    // Determine if the Filter button should be enabled
+    final bool isFilterEnabled = _selectedHistoryYear != null &&
+        !_isLoadingHistory &&
+        !_isLoadingPrevHistory;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // **ROW CHỨA TEXT MÔ TẢ VÀ BỘ LỌC - CĂN PHẢI BỘ LỌC**
+        // Filter Controls Row
         Padding(
           padding: EdgeInsets.only(bottom: _tableCellHorizontalPadding * 2.5),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Wrap(
+            // Use Wrap for responsiveness on smaller screens
+            spacing: kFilterSpacing, // Horizontal space between items
+            runSpacing: kFilterSpacing, // Vertical space if items wrap
+            alignment: WrapAlignment.spaceBetween, // Distribute space
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
+              // Left Side: Filter Description Text (Flexible)
+              Flexible(
+                // Allow text to shrink if needed
+                fit: FlexFit.loose,
                 child: Text(
                   _isLoadingHistory || _isLoadingPrevHistory
                       ? 'Đang tải lịch sử...'
-                      : 'Lịch sử ${_buildFilterDescription()}: ${_historyTotalBills} phiếu - ${_currencyFormatter.format(_historyTotalRevenue)}',
+                      : 'Lọc theo: ${_buildFilterDescription()}',
                   style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              SizedBox(width: kFilterSpacing),
 
-              // Phần các Dropdown và nút Lọc (Wrap căn phải)
+              // Right Side: Filter Dropdowns and Button (Grouped)
               Wrap(
                 spacing: kFilterSpacing,
                 runSpacing: kFilterSpacing,
                 crossAxisAlignment: WrapCrossAlignment.center,
-                alignment: WrapAlignment.end, // **CĂN PHẢI WIDGET TRONG WRAP**
+                alignment:
+                    WrapAlignment.end, // Keep filters aligned to the right
                 children: [
+                  // Year Dropdown
                   _buildHistoryFilterDropdown<int>(
                     theme: theme,
-                    value: _selectedHistoryYear ?? _years.first,
-                    items: _years
-                        .map((year) => DropdownMenuItem<int>(
-                            value: year, child: Text(year.toString())))
-                        .toList(),
+                    value: _selectedHistoryYear ??
+                        _years.first, // Default to latest year if null
+                    items: yearItems,
+                    hintText: 'Năm', // Add hint
                     onChanged: (int? newValue) {
                       if (newValue != null &&
                           newValue != _selectedHistoryYear) {
+                        // When year changes, reset month and day, but DON'T auto-trigger fetch yet
                         setState(() {
                           _selectedHistoryYear = newValue;
-                          _selectedHistoryMonth = null;
-                          _selectedHistoryDay = null;
+                          _selectedHistoryMonth = null; // Reset month
+                          _selectedHistoryDay = null; // Reset day
                         });
                       }
                     },
                   ),
+                  // Month Dropdown
                   _buildHistoryFilterDropdown<int?>(
                     theme: theme,
                     value: _selectedHistoryMonth,
                     items: monthItems,
+                    hintText: 'Tháng', // Add hint
                     onChanged: (int? newValue) {
+                      // Allow selecting null (All months)
                       if (newValue != _selectedHistoryMonth) {
+                        // When month changes, reset day, DON'T auto-trigger fetch
                         setState(() {
                           _selectedHistoryMonth = newValue;
-                          _selectedHistoryDay = null;
+                          _selectedHistoryDay = null; // Reset day
                         });
                       }
                     },
                   ),
+                  // Day Dropdown (conditionally enabled)
                   IgnorePointer(
-                    ignoring: _selectedHistoryMonth == null,
+                    ignoring:
+                        !isDayFilterEnabled, // Disable pointer events if month not selected
                     child: Opacity(
-                      opacity: _selectedHistoryMonth == null ? 0.5 : 1.0,
+                      opacity:
+                          isDayFilterEnabled ? 1.0 : 0.5, // Dim if disabled
                       child: _buildHistoryFilterDropdown<int?>(
                         theme: theme,
                         value: _selectedHistoryDay,
                         items: dayItems,
-                        onChanged: _selectedHistoryMonth == null
+                        hintText: 'Ngày', // Add hint
+                        onChanged: !isDayFilterEnabled
                             ? null
                             : (int? newValue) {
+                                // Allow selecting null (All days)
                                 if (newValue != _selectedHistoryDay) {
                                   setState(() {
                                     _selectedHistoryDay = newValue;
                                   });
+                                  // Optional: Trigger fetch immediately when day changes?
+                                  // _triggerHistoryFetch(); // Uncomment if desired
                                 }
                               },
                       ),
                     ),
                   ),
+                  // Filter Button
                   ElevatedButton.icon(
-                    icon: Icon(Icons.filter_list, size: 16),
+                    icon: Icon(Icons.filter_list_rounded,
+                        size: 16), // Use rounded icon
                     label: Text('Lọc'),
-                    onPressed: _isLoadingHistory || _isLoadingPrevHistory
-                        ? null
-                        : () => _triggerHistoryFetch(), // Disable khi đang load
+                    // Disable button if year not selected or if loading
+                    onPressed:
+                        !isFilterEnabled ? null : () => _triggerHistoryFetch(),
                     style: theme.elevatedButtonTheme.style?.copyWith(
+                      // Make button slightly smaller to fit better
                       padding: MaterialStateProperty.all(
                           EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                       textStyle: MaterialStateProperty.all(
                           theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.white,
+                              color: theme
+                                  .colorScheme.onSecondary, // Use theme color
                               fontWeight: FontWeight.w600)),
+                      // Visual cue for disabled state
+                      backgroundColor:
+                          MaterialStateProperty.resolveWith<Color?>(
+                        (Set<MaterialState> states) {
+                          if (states.contains(MaterialState.disabled)) {
+                            return Colors
+                                .grey.shade400; // Grey out when disabled
+                          }
+                          return theme
+                              .elevatedButtonTheme.style?.backgroundColor
+                              ?.resolve(
+                                  states); // Use default theme color otherwise
+                        },
+                      ),
+                      foregroundColor:
+                          MaterialStateProperty.resolveWith<Color?>(
+                        (Set<MaterialState> states) {
+                          if (states.contains(MaterialState.disabled)) {
+                            return Colors.grey.shade700;
+                          }
+                          return theme
+                              .elevatedButtonTheme.style?.foregroundColor
+                              ?.resolve(states);
+                        },
+                      ),
                     ),
                   ),
                 ],
@@ -2050,43 +2757,50 @@ class _ManagementScreenState extends State<ManagementScreen> {
             ],
           ),
         ),
-        // Phần Bảng dữ liệu
+
+        // History Payment Table Card
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Table Header
                 _buildTableRow(
                   theme: theme,
                   height: _tableHeaderHeight,
                   isHeader: true,
                   backgroundColor: headerBackgroundColor,
                   cells: [
-                    Text('MÃ HĐ'), // 0
-                    Text('TRẠNG THÁI'), // 1
-                    Text('TG THANH TOÁN'), // 2
-                    Text('PT THANH TOÁN'), // 3
-                    Text('TỔNG TIỀN'), // 4
-                    Text('CHI TIẾT'), // 5
+                    Text('MÃ HĐ'),
+                    Text('TRẠNG THÁI'),
+                    Text('TG THANH TOÁN'),
+                    Text('PT THANH TOÁN'),
+                    Text('TỔNG TIỀN'),
+                    Text('CHI TIẾT'),
                   ],
                 ),
                 Divider(
                     height: dividerThickness,
                     thickness: dividerThickness,
                     color: dividerColor),
+                // Table Body (Scrollable with Refresh)
                 Expanded(
                   child: RefreshIndicator(
+                    // Enable refresh only if not loading and year is selected
                     onRefresh: (_selectedHistoryYear == null ||
                             _isLoadingHistory ||
                             _isLoadingPrevHistory)
-                        ? () async {}
-                        : () => _triggerHistoryFetch(), // Gọi hàm trigger mới
+                        ? () async {} // Do nothing if refresh is disabled
+                        : () =>
+                            _triggerHistoryFetch(), // Call the trigger function
                     color: theme.colorScheme.secondary,
                     backgroundColor: theme.cardTheme.color ?? Colors.white,
-                    child: _buildHistoryBillsContent(theme),
+                    child: _buildHistoryBillsContent(
+                        theme), // Build list or messages
                   ),
                 ),
+                // Table Footer (Optional, shown only with data)
                 if (!_isLoadingHistory &&
                     _historyError == null &&
                     _historicalBills.isNotEmpty) ...[
@@ -2100,12 +2814,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     isHeader: true,
                     backgroundColor: headerBackgroundColor,
                     cells: [
-                      Text('MÃ HĐ'), // 0
-                      Text('TRẠNG THÁI'), // 1
-                      Text('TG THANH TOÁN'), // 2
-                      Text('PT THANH TOÁN'), // 3
-                      Text('TỔNG TIỀN'), // 4
-                      Text('CHI TIẾT'), // 5
+                      Text('MÃ HĐ'),
+                      Text('TRẠNG THÁI'),
+                      Text('TG THANH TOÁN'),
+                      Text('PT THANH TOÁN'),
+                      Text('TỔNG TIỀN'),
+                      Text('CHI TIẾT'),
                     ],
                   ),
                 ]
@@ -2117,92 +2831,152 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
-  // **Hàm helper để tạo Dropdown cho bộ lọc**
+  // --- Helper to build Dropdown for History Filter ---
   Widget _buildHistoryFilterDropdown<T>({
     required ThemeData theme,
     required T value,
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?>? onChanged,
+    String? hintText, // Optional hint text
   }) {
+    final bool isDisabled =
+        (_isLoadingHistory || _isLoadingPrevHistory); // Check if loading
+
     return Container(
-      height: 38,
+      height: 38, // Consistent height for filter elements
+      constraints: BoxConstraints(minWidth: 100), // Minimum width
       padding: EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-          color: theme.inputDecorationTheme.fillColor,
+          // Use theme's input decoration background or default white
+          color: isDisabled
+              ? Colors.grey.shade200 // Lighter grey when disabled
+              : (theme.inputDecorationTheme.fillColor ?? Colors.white),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color:
-                  theme.inputDecorationTheme.enabledBorder?.borderSide.color ??
-                      Colors.grey)),
+              color: isDisabled
+                  ? Colors.grey.shade400
+                  : (theme.inputDecorationTheme.enabledBorder?.borderSide
+                          .color ??
+                      Colors.grey.shade400))),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
           items: items,
-          onChanged:
-              _isLoadingHistory || _isLoadingPrevHistory ? null : onChanged,
-          style: theme.textTheme.bodyMedium,
-          icon: Icon(Icons.arrow_drop_down,
+          // Disable onChanged callback if loading
+          onChanged: isDisabled ? null : onChanged,
+          // Use hint widget if provided and value is null (for nullable types)
+          hint: hintText != null && value == null
+              ? Text(hintText, style: theme.inputDecorationTheme.hintStyle)
+              : null,
+          style: theme.textTheme.bodyMedium?.copyWith(
+              color: isDisabled
+                  ? Colors.grey.shade700
+                  : theme.textTheme.bodyMedium
+                      ?.color // Dim text color when disabled
+              ),
+          icon: Icon(Icons.arrow_drop_down_rounded, // Use rounded icon
               size: 20,
-              color: _isLoadingHistory || _isLoadingPrevHistory
-                  ? Colors.grey
-                  : null),
-          isExpanded: false,
-          focusColor: Colors.transparent,
+              color: isDisabled
+                  ? Colors.grey.shade500
+                  : theme.iconTheme.color
+                      ?.withOpacity(0.7)), // Dim icon when disabled
+          isExpanded: false, // Don't expand dropdown itself
+          focusColor: Colors.transparent, // Remove focus highlight
+          dropdownColor: theme.cardTheme.color ??
+              Colors.white, // Background color of the dropdown menu
         ),
       ),
     );
   }
 
-  // **Hàm helper để tạo mô tả bộ lọc hiện tại**
+  // --- Helper to create filter description string ---
   String _buildFilterDescription({bool short = false}) {
-    if (_selectedHistoryYear == null) return "Chưa chọn";
-    String desc = _selectedHistoryYear.toString();
+    if (_selectedHistoryYear == null) return "Chưa chọn năm";
+
+    List<String> parts = [_selectedHistoryYear.toString()]; // Start with year
+
     if (_selectedHistoryMonth != null) {
-      desc += "/${_selectedHistoryMonth.toString().padLeft(2, '0')}";
+      parts.add(
+          "T${_selectedHistoryMonth.toString()}"); // Add month like "T1", "T12"
       if (_selectedHistoryDay != null) {
-        desc += "/${_selectedHistoryDay.toString().padLeft(2, '0')}";
+        // Format day with leading zero if needed
+        parts.add("Ngày ${_selectedHistoryDay.toString().padLeft(2, '0')}");
       } else if (!short) {
-        // desc += "/Tất cả ngày"; // Bỏ nếu không muốn hiển thị
+        // Optionally add "All Days" if month is selected but day is not
+        // parts.add("Tất cả ngày"); // (Commented out for brevity)
       }
     } else if (!short) {
-      desc += "/Tất cả";
+      // Optionally add "All Months/Days" if only year is selected
+      parts.add("Tất cả tháng");
     }
-    return desc;
+
+    return parts.join(' / '); // Join parts with a separator
   }
 
   // --- Helper to build content inside RefreshIndicator for History Bills ---
   Widget _buildHistoryBillsContent(ThemeData theme) {
     final dividerColor = theme.dividerTheme.color ?? Colors.grey.shade300;
     final dividerThickness = theme.dividerTheme.thickness ?? 1.0;
-    final Color oddRowColor = Colors.grey.shade200;
 
-    // --- Handle Loading, Error, Empty States ---
+    // --- Handle Loading State ---
     if (_isLoadingHistory && _historicalBills.isEmpty) {
+      // Show loading only if list is empty initially
       return Center(
-          child: CircularProgressIndicator(color: theme.colorScheme.secondary));
+          child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: CircularProgressIndicator(color: theme.colorScheme.secondary),
+      ));
     }
+
+    // --- Handle Error State ---
     if (_historyError != null) {
       return Center(
         child: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text(_historyError!,
-                style: TextStyle(color: theme.colorScheme.error),
-                textAlign: TextAlign.center)),
+            child: Column(
+              // Use column for icon, text, and retry button
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline,
+                    color: theme.colorScheme.error, size: 30),
+                SizedBox(height: 10),
+                Text(_historyError!,
+                    style: TextStyle(color: theme.colorScheme.error),
+                    textAlign: TextAlign.center),
+                SizedBox(height: 15),
+                ElevatedButton.icon(
+                    icon: Icon(Icons.refresh, size: 18),
+                    label: Text("Thử lại"),
+                    onPressed: () => _triggerHistoryFetch(), // Retry fetch
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.error,
+                      foregroundColor: theme.colorScheme.onError,
+                    ))
+              ],
+            )),
       );
     }
+
+    // --- Handle Empty State (Data loaded, no error, but no bills) ---
     if (!_isLoadingHistory &&
         _historyError == null &&
         _historicalBills.isEmpty) {
+      // Use LayoutBuilder and SingleChildScrollView for centering and pull-to-refresh
       return LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
+          physics:
+              AlwaysScrollableScrollPhysics(), // Enable refresh even when empty
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            constraints:
+                BoxConstraints(minHeight: constraints.maxHeight), // Fill height
             child: Center(
               child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text('Không có phiếu cho khoảng thời gian đã chọn.',
-                      style: theme.textTheme.bodyMedium)),
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                      'Không tìm thấy hóa đơn nào cho khoảng thời gian\n"${_buildFilterDescription()}".', // Include filter description
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: Colors.grey.shade600),
+                      textAlign: TextAlign.center)),
             ),
           ),
         ),
@@ -2210,9 +2984,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
 
     // --- Display Data Rows ---
+    // Build the list only if bills exist and there are no errors
     if (_historicalBills.isNotEmpty && _historyError == null) {
       return ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics:
+            const AlwaysScrollableScrollPhysics(), // Enable scrolling & refresh
         itemCount: _historicalBills.length,
         separatorBuilder: (context, index) => Divider(
             height: dividerThickness,
@@ -2220,14 +2996,17 @@ class _ManagementScreenState extends State<ManagementScreen> {
             color: dividerColor.withOpacity(0.6)),
         itemBuilder: (context, index) {
           final payment = _historicalBills[index];
+          // Assume status is always 'Hoàn thành' for historical payments
           final statusText = "Hoàn thành";
+          // Check if details are being fetched for this specific payment
           final bool isLoadingDetails =
               _fetchingDetailsForPaymentIds.contains(payment.paymentId);
 
           return _buildTableRow(
             theme: theme,
             height: _tableRowHeight,
-            backgroundColor: index % 2 != 0 ? oddRowColor : null,
+            // Apply alternating row color
+            backgroundColor: index % 2 != 0 ? _oddRowColor : null,
             cells: [
               // 0: MÃ HĐ
               Text(payment.paymentId.toString(),
@@ -2240,15 +3019,20 @@ class _ManagementScreenState extends State<ManagementScreen> {
               Text(_fullDateTimeFormatter.format(payment.paymentTime),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               // 3: PT THANH TOÁN
-              Text(payment.paymentMethod,
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              // 4: TỔNG TIỀN
-              Text(_currencyFormatter.format(payment.amount)),
+              Tooltip(
+                message: payment.paymentMethod,
+                child: Text(payment.paymentMethod,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              // 4: TỔNG TIỀN (Align Right)
+              Text(_currencyFormatter.format(payment.amount),
+                  textAlign: TextAlign.right),
               // 5: CHI TIẾT
               OutlinedButton(
                 onPressed: isLoadingDetails
                     ? null
                     : () async {
+                        // Similar logic as in shift view for fetching details
                         if (!mounted) return;
                         setStateIfMounted(() => _fetchingDetailsForPaymentIds
                             .add(payment.paymentId));
@@ -2262,19 +3046,23 @@ class _ManagementScreenState extends State<ManagementScreen> {
                                     height: 18,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        color: theme.colorScheme.onPrimary)),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(theme
+                                                .colorScheme.onSecondary))),
                                 SizedBox(width: 15),
-                                Text('Đang tải chi tiết...',
+                                Text(
+                                    'Đang tải chi tiết hóa đơn #${payment.paymentId}...',
                                     style: TextStyle(
-                                        color: theme.colorScheme.onPrimary)),
+                                        color: theme.colorScheme.onSecondary)),
                               ],
                             ),
                             duration: Duration(seconds: 30),
                             backgroundColor:
-                                theme.colorScheme.secondary.withOpacity(0.9),
+                                theme.colorScheme.secondary.withOpacity(0.95),
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
+                            margin: EdgeInsets.all(10),
                           ),
                         );
 
@@ -2289,18 +3077,24 @@ class _ManagementScreenState extends State<ManagementScreen> {
                           ScaffoldMessenger.of(context).hideCurrentSnackBar();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Lỗi: ${e.toString()}'),
+                              content: Text(
+                                  'Lỗi tải chi tiết: ${e.toString().replaceFirst("Exception: ", "")}'),
                               backgroundColor: theme.colorScheme.error,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
+                              margin: EdgeInsets.all(10),
                             ),
                           );
                         } finally {
-                          setStateIfMounted(() => _fetchingDetailsForPaymentIds
-                              .remove(payment.paymentId));
+                          if (mounted) {
+                            setStateIfMounted(() =>
+                                _fetchingDetailsForPaymentIds
+                                    .remove(payment.paymentId));
+                          }
                         }
                       },
+                // Style button consistently
                 style: theme.outlinedButtonTheme.style?.copyWith(
                     padding: MaterialStateProperty.all(
                         EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
@@ -2321,22 +3115,34 @@ class _ManagementScreenState extends State<ManagementScreen> {
         },
       );
     }
+
+    // Fallback if none of the above conditions are met
     return const SizedBox.shrink();
   }
 
-  // --- Widget chọn ca ---
+  // --- Widget chọn ca (Shift Selector) ---
   Widget _buildShiftSelector(ThemeData theme, double horizontalPadding) {
+    // Loading State (while shifts are being fetched)
     if (_isLoadingShifts && _shifts.isEmpty) {
       return Container(
-          padding: EdgeInsets.symmetric(vertical: horizontalPadding / 1.5),
+          // Use a fixed height consistent with the final selector height
           height: 45,
-          child: const Center(child: LinearProgressIndicator(minHeight: 2)));
+          padding: EdgeInsets.symmetric(
+              vertical: (45 - 4) / 2), // Center the progress bar vertically
+          child: const Center(
+              child: LinearProgressIndicator(
+                  minHeight: 4))); // Thicker progress bar
     }
+
+    // Error State (if fetching shifts failed)
     if (_shiftError != null && _shifts.isEmpty) {
       return Container(
-          padding: EdgeInsets.symmetric(
-              vertical: horizontalPadding / 1.5, horizontal: horizontalPadding),
-          height: 45,
+          height: 45, // Consistent height
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.error.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Center(
               child: Text(
             _shiftError!,
@@ -2344,57 +3150,116 @@ class _ManagementScreenState extends State<ManagementScreen> {
             textAlign: TextAlign.center,
           )));
     }
+
+    // Empty State (shifts loaded, but the list is empty)
     if (_shifts.isEmpty && !_isLoadingShifts) {
       return Container(
-          padding: EdgeInsets.symmetric(vertical: horizontalPadding / 1.5),
-          height: 45,
+          height: 45, // Consistent height
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Center(
-              child: Text("Không có ca trực nào.",
-                  style: theme.textTheme.bodySmall)));
+              child: Text("Không có ca trực nào được tìm thấy.",
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: Colors.grey.shade700))));
     }
 
+    // --- Build the Shift Selector List ---
+    // Use a fixed-height container to prevent layout jumps
     return Container(
-        padding: EdgeInsets.symmetric(vertical: horizontalPadding / 1.5),
-        height: 45,
+        height: 45, // Consistent height
         child: ListView.separated(
-            scrollDirection: Axis.horizontal,
+            scrollDirection: Axis.horizontal, // Horizontal scrolling
             itemCount: _shifts.length,
+            // Add padding to the sides of the list
             padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
+            // Add spacing between shift items
+            separatorBuilder: (context, index) =>
+                const SizedBox(width: 10), // Increased spacing for Row
             itemBuilder: (context, index) {
               final shift = _shifts[index];
               final bool isSelected = _selectedShiftId == shift.shiftId;
               final formatTime = _timeFormatter;
+              final bool isLoading =
+                  (_isLoadingShiftPayments || _isLoadingCustomerSummary) &&
+                      isSelected; // Check if loading *this* shift's data
 
-              return ChoiceChip(
-                  label: Text(
-                      'Ca ${formatTime.format(shift.startTime)} - ${formatTime.format(shift.endTime)}'),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    if (selected) {
-                      _selectShift(shift.shiftId);
-                    }
-                  },
-                  selectedColor: theme.colorScheme.secondary,
-                  backgroundColor: theme.chipTheme.backgroundColor ??
-                      theme.cardTheme.color?.withOpacity(0.7),
-                  labelStyle: theme.chipTheme.labelStyle?.copyWith(
-                      color: isSelected
-                          ? theme.colorScheme.onSecondary
-                          : theme.chipTheme.labelStyle?.color,
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal),
-                  avatar: Icon(Icons.access_time_filled_rounded,
-                      size: 14,
-                      color: isSelected
-                          ? theme.colorScheme.onSecondary.withOpacity(0.8)
-                          : theme.chipTheme.labelStyle?.color
-                              ?.withOpacity(0.7)),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 10),
-                  visualDensity: VisualDensity.compact,
-                  shape: theme.chipTheme.shape,
-                  elevation: isSelected ? 1.5 : 0.5,
-                  pressElevation: 2.5);
+              // Combine Chip and Key Icon in a Row
+              return Row(
+                mainAxisSize: MainAxisSize.min, // Row takes minimum width
+                crossAxisAlignment:
+                    CrossAxisAlignment.center, // Center items vertically
+                children: [
+                  // Choice Chip for selecting the shift
+                  ChoiceChip(
+                    label: Text(
+                        'Ca ${formatTime.format(shift.startTime)} - ${formatTime.format(shift.endTime)}'),
+                    selected: isSelected,
+                    // Disable selection if this shift's data is loading
+                    onSelected: isLoading
+                        ? null
+                        : (selected) {
+                            if (selected) {
+                              _selectShift(shift.shiftId); // Select this shift
+                            }
+                          },
+                    // Use theme colors, highlight selected
+                    selectedColor: theme.colorScheme.secondary,
+                    backgroundColor: theme.chipTheme.backgroundColor ??
+                        theme.cardTheme.color?.withOpacity(0.7),
+                    // Adjust label style based on selection
+                    labelStyle: theme.chipTheme.labelStyle?.copyWith(
+                        color: isSelected
+                            ? theme.colorScheme.onSecondary
+                            : theme.chipTheme.labelStyle?.color,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal),
+                    // Add time icon as avatar
+                    avatar: isLoading // Show spinner if loading this shift
+                        ? SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    isSelected
+                                        ? theme.colorScheme.onSecondary
+                                        : theme.colorScheme.secondary)))
+                        : Icon(Icons.access_time_filled_rounded,
+                            size: 14,
+                            color: isSelected
+                                ? theme.colorScheme.onSecondary.withOpacity(0.8)
+                                : theme.chipTheme.labelStyle?.color
+                                    ?.withOpacity(0.7)),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 10),
+                    visualDensity: VisualDensity.compact, // Make chip compact
+                    shape: theme.chipTheme.shape, // Use theme shape
+                    elevation: isSelected ? 1.5 : 0.5,
+                    pressElevation: 2.5,
+                    materialTapTargetSize: MaterialTapTargetSize
+                        .shrinkWrap, // Reduce tap target size
+                  ),
+
+                  // Key Icon Button to show secret code
+                  SizedBox(width: 4), // Small space between chip and icon
+                  IconButton(
+                    icon: Icon(Icons.vpn_key_outlined),
+                    iconSize: 18, // Small icon
+                    color: theme.iconTheme.color?.withOpacity(0.7),
+                    tooltip: 'Xem Secret code của ca', // Tooltip
+                    visualDensity: VisualDensity.compact, // Compact density
+                    padding: EdgeInsets.all(4), // Minimal padding
+                    constraints:
+                        BoxConstraints(), // Remove extra constraints for size
+                    onPressed: () {
+                      // Show the secret code dialog for this shift
+                      _showSecretCodeDialog(context, shift);
+                    },
+                  ),
+                ],
+              );
             }));
   }
-} // End of _ManagementScreenState
+} // End of _ManagementScreenState class
