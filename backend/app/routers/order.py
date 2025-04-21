@@ -24,3 +24,7 @@ async def confirm_order(order_data: schemas.OrderCreate, db: Session = Depends(g
 @router.put("/table/update-package")
 def update_table_package(data: schemas.Table_UpdatePackage, db: Session = Depends(get_db)):
     return order_service.update_package_for_table(db, data)
+
+@router.get("/session/{session_id}/table-number")
+def get_table_number(session_id: int, db: Session = Depends(get_db)):
+    return order_service.get_table_number_by_session_id(db, session_id)

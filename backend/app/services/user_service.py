@@ -2,9 +2,12 @@ from email.mime.text import MIMEText
 import smtplib
 from typing import Dict, List
 import requests  # ✅ Dùng thư viện requests chuẩn
+from app import models
 from app.database import get_firebase_db
 from firebase_admin import auth
 from firebase_admin.auth import UserNotFoundError
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, time
 
 FIREBASE_API_KEY = "AIzaSyCwbBxt5US6rbhM7PMGWiX0JsxisZFywjA"  # 🔥 Thay bằng API Key của Firebase
 
@@ -45,46 +48,47 @@ def format_phone_number(phone: str) -> str:
 
     raise ValueError("Số điện thoại không hợp lệ!")
 
-def create_user(name: str, email: str, phone: str, password: str):
-    try:
-        phone_e164 = format_phone_number(phone)  # 🔥 Chuyển đổi số điện thoại
+# def create_user(name: str, email: str, phone: str, password: str):
+#     try:
+#         phone_e164 = format_phone_number(phone)  # 🔥 Chuyển đổi số điện thoại
         
-        # ✅ Tạo user trên Firebase Authentication với số điện thoại
-        user = auth.create_user(
-            email=email,
-            phone_number=phone_e164,  # 🔥 Đưa số điện thoại chuẩn E.164 vào đây
-            email_verified=False,
-            password=password
-        )
+#         # ✅ Tạo user trên Firebase Authentication với số điện thoại
+#         user = auth.create_user(
+#             email=email,
+#             phone_number=phone_e164,  # 🔥 Đưa số điện thoại chuẩn E.164 vào đây
+#             email_verified=False,
+#             password=password
+#         )
 
-        # ✅ Lưu thông tin vào Firebase Realtime Database (nếu cần)
-        ref = get_firebase_db().child("users").child(user.uid)
-        ref.set({
-            "name": name,
-            "email": email,
-            "phone": phone_e164
-        })
+#         # ✅ Lưu thông tin vào Firebase Realtime Database (nếu cần)
+#         ref = get_firebase_db().child("users").child(user.uid)
+#         ref.set({
+#             "name": name,
+#             "email": email,
+#             "phone": phone_e164
+#         })
 
-        return {"message": "User created successfully", "user_id": user.uid}
+#         return {"message": "User created successfully", "user_id": user.uid}
 
-    except auth.EmailAlreadyExistsError:
-        return {"error": "Email đã tồn tại, vui lòng sử dụng email khác."}
+#     except auth.EmailAlreadyExistsError:
+#         return {"error": "Email đã tồn tại, vui lòng sử dụng email khác."}
 
-    except auth.PhoneNumberAlreadyExistsError:
-        return {"error": "Số điện thoại đã được đăng ký, vui lòng sử dụng số khác."}
+#     except auth.PhoneNumberAlreadyExistsError:
+#         return {"error": "Số điện thoại đã được đăng ký, vui lòng sử dụng số khác."}
 
-    except ValueError as e:
-        return {"error": str(e)}
+#     except ValueError as e:
+#         return {"error": str(e)}
     
-    except Exception as e:
-        return {"error": f"Lỗi không xác định: {str(e)}"}
-# Lấy thông tin người dùng từ Realtime Database
-def get_user(user_id: str):
-    ref = get_firebase_db().child("users").child(user_id)
-    user_data = ref.get()
-    if user_data:
-        return user_data
-    return {"message": "User not found"}
+#     except Exception as e:
+#         return {"error": f"Lỗi không xác định: {str(e)}"}
+
+# # Lấy thông tin người dùng từ Realtime Database
+# def get_user(user_id: str):
+#     ref = get_firebase_db().child("users").child(user_id)
+#     user_data = ref.get()
+#     if user_data:
+#         return user_data
+#     return {"message": "User not found"}
 
 # Lấy danh sách người dùng từ Firebase Authentication
 # Hàm lấy danh sách users
@@ -120,6 +124,30 @@ def send_password_reset(email: str) -> dict:
     except Exception as e:
         raise ValueError(f"Lỗi khi gửi email: {str(e)}")
 
+def login_employee_by_secret_code(db: Session, secret_code: str) -> dict:
+    current_time = datetime.now()
+    print("Current time:", current_time)
+    new_datetime = current_time + timedelta(hours=7)
+    print("New datetime:", new_datetime)
 
+    # Kiểm tra ca đang hoạt động với secret_code hợp lệ
+    shift = db.query(models.Shift).filter(
+        models.Shift.secret_code == secret_code,
+        models.Shift.start_time <= new_datetime,
+        models.Shift.end_time >= new_datetime
+    ).first()
+
+    if not shift:
+        return {
+            "error": "Secret code không hợp lệ hoặc không thuộc ca hiện tại."
+        }
+
+    return {
+        "message": "Đăng nhập thành công",
+        "shift_id": shift.shift_id,
+        "start_time": shift.start_time.strftime("%H:%M"),
+        "end_time": shift.end_time.strftime("%H:%M"),
+        "secret_code": shift.secret_code
+    }
 
 

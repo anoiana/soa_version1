@@ -82,6 +82,19 @@ class Order(BaseModel):
     class Config:
         from_attributes = True
 
+
+# ORDER SERVICE - response mở rộng
+class OrderItemDetail(BaseModel):
+    order_item_id: int
+    order_id: int
+    item_id: int
+    name: str
+    quantity: int
+    status: str
+
+    class Config:
+        from_attributes = True
+
 # TABLE SESSIONS
 class TableSessionBase(BaseModel):
     number_of_customers: int
@@ -116,7 +129,7 @@ class ShiftResponse(BaseModel):
     shift_id: int
     start_time: datetime
     end_time: datetime
-
+    secret_code: str
     class Config:
         from_attributes = True  # Cho phép chuyển đổi từ SQLAlchemy model
 

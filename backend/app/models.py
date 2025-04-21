@@ -48,6 +48,7 @@ class Order(Base):
     order_id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("table_session.session_id"), nullable=False)
     order_time = Column(DateTime, nullable=False)
+    status = Column(String)
     items = relationship("OrderItem", back_populates="order")
 
 class OrderItem(Base):
@@ -99,7 +100,6 @@ class Payment(Base):
     session_id = Column(Integer, ForeignKey("table_session.session_id"), nullable=False, unique=True)
     amount = Column(DECIMAL(10, 2), nullable=False)
     payment_time = Column(DateTime, default=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")))
-    payment_method = Column(String(50), nullable=True)  # Phương thức thanh toán (tiền mặt, thẻ, v.v.)
-
+    payment_method = Column(String, nullable=True)
     # Liên kết với TableSession
     session = relationship("TableSession", back_populates="payment")

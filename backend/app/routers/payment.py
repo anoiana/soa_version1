@@ -25,3 +25,20 @@ def get_payments_by_shift(shift_id: int, db: Session = Depends(get_db)):
 @router.get("/history/")
 def get_payments_by_date(year: int, month: Optional[int] = None, day: Optional[int] = None, db: Session = Depends(get_db)):
     return payment_service.get_payments_by_date(db, year, month, day)
+
+@router.get("/{payment_id}/detail")
+def get_payment_details(payment_id: int, db: Session = Depends(get_db)):
+    return payment_service.get_payment_details_by_id(db, payment_id)
+
+@router.get("/shift/{shift_id}/total-customers")
+def get_total_customers(shift_id: int, db: Session = Depends(get_db)):
+    return payment_service.get_total_customers_by_shift(db, shift_id)
+
+@router.get("/total-customers/by-date/")
+def get_total_customers_by_date(
+    year: int,
+    month: Optional[int] = None,
+    day: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    return payment_service.get_total_customers_by_date(db, year, month, day)

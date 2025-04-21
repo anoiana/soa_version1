@@ -4,16 +4,23 @@ from app.routers import order, menu, payment, shift, kitchen, user
 from app.database import SessionLocal
 from app.services.shift_service import create_shifts_for_today
 from fastapi.middleware.cors import CORSMiddleware
+from app.scheduler import start_scheduler
 
-# Lifespan event handler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Ứng dụng khởi động...")
     db = SessionLocal()
-    create_shifts_for_today(db)
-    db.close()
-    print("Khởi động thành công")
-    yield  # Để ứng dụng chạy bình thường sau khi khởi động
+    try:
+        result = create_shifts_for_today(db, raise_if_full=False)
+        print(result)
+    except Exception as e:
+        print("Lỗi tạo ca khi khởi động:", e)
+    finally:
+        db.close()
+
+    start_scheduler()
+    print("Khởi động thành công và scheduler đã chạy")
+    yield
 
 # Khởi tạo FastAPI với lifespan
 app = FastAPI(title="Restaurant API", lifespan=lifespan)
